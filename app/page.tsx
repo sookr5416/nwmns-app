@@ -25,10 +25,10 @@ const COURT_SLOTS = [
 ];
 
 export default function Home() {
-  // 🌟 기본값을 'user'(사용자 모드)로 변경했습니다.
+  // 기본값을 'user'(사용자 모드)로 변경했습니다.
   const [viewMode, setViewMode] = useState<'admin' | 'user'>('user');
   
-  // 🌟 관리자 로그인 팝업 상태
+  // 관리자 로그인 팝업 상태
   const [showLogin, setShowLogin] = useState(false);
   const [loginId, setLoginId] = useState('');
   const [loginPw, setLoginPw] = useState('');
@@ -62,7 +62,7 @@ export default function Home() {
     if (error) console.error('데이터 불러오기 에러:', error);
   };
 
-  // 🌟 관리자 로그인 처리 함수 (DB 연동 버전)
+  // 관리자 로그인 처리 함수 (DB 연동 버전)
   const handleAdminLogin = async (e: FormEvent) => {
     e.preventDefault();
     
@@ -90,6 +90,7 @@ export default function Home() {
     }
   };
 
+  // 등록하기 버튼 클릭 이벤트
   const handleRegister = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!name.trim()) return alert('이름을 입력해주세요.');
@@ -114,12 +115,24 @@ export default function Home() {
     setPlayers([...players, newPlayer]);
     setName('');
     setAge('');
-    nameInputRef.current?.focus();
 
+    nameInputRef.current?.focus();
     await supabase.from('players').insert([newPlayer]);
   };
 
+  // 전체 대기 선수 (로비)에서 X 버튼 클릭 이벤트
   const handleDelete = async (id: string) => {
+    // 삭제 하려는 선수 정보 찾기
+    const targetPlayer = players.find((p) => p.id === id);
+
+    // 선수가 존재하고, 게임 수가 1 이상인 경우
+    if (targetPlayer && targetPlayer.count >= 1) {
+      if (!confirm(`${targetPlayer.name} 선수는 이미 ${targetPlayer.count}게임을 진행했습니다. 정말 목록에서 삭제하시겠습니까?`)) {
+        return;
+      }
+    }
+
+    // 게임 수가 0 이거나, 위에서 [확인]을 누른 경우에만 삭제
     setPlayers(players.filter((p) => p.id !== id));
     await supabase.from('players').delete().eq('id', id);
   };
@@ -150,6 +163,7 @@ export default function Home() {
     await supabase.from('players').update({ status: targetSlotId }).eq('id', playerId);
   };
 
+  // 초기화 버튼 클릭 이벤트
   const resetSlot = async (slotId: string) => {
     const updatedPlayers = players.map(p => p.status === slotId ? { ...p, status: 'lobby' } : p);
     setPlayers(updatedPlayers);
@@ -160,6 +174,7 @@ export default function Home() {
     }
   };
 
+  // 경기 종료 버튼 클릭 이벤트
   const finishGame = async (slotId: string) => {
     const updatedPlayers = players.map(p => {
       if (p.status === slotId) return { ...p, status: 'lobby', count: p.count + 1 };
@@ -178,7 +193,7 @@ export default function Home() {
     }
   }
 
-  // 하루 마감 (구글 시트 전송용 껍데기 함수)
+  // 경기 종료 (구글 시트로 이동) 버튼 클릭 이벤트
   const handleDayClose = async () => {
     if (confirm('오늘의 모임을 마감하고 구글 시트로 데이터를 전송하시겠습니까?')) {
       alert('구글 시트 연동 기능이 곧 추가될 예정입니다!');
@@ -189,7 +204,7 @@ export default function Home() {
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans relative">
       
-      {/* 🌟 관리자 로그인 팝업 (모달) */}
+      {/* 관리자 로그인 팝업 (모달) */}
       {showLogin && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
           <div className="bg-white p-6 rounded-2xl shadow-xl w-80">
@@ -251,7 +266,10 @@ export default function Home() {
 
           <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'lobby')}>
             <h3 className="text-sm font-bold text-slate-500 mb-3 flex justify-between items-center">
-              전체 대기 선수 (로비) <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs">{players.filter(p => p.status === 'lobby').length}명</span>
+              전체 대기 선수 (로비) 
+              <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs">
+                {players.filter(p => p.status === 'lobby').length} / {players.length}명
+              </span>
             </h3>
             
             <ul className="space-y-2 min-h-[200px]">
@@ -316,7 +334,7 @@ export default function Home() {
         </div>
 
         <h1 className="text-3xl font-extrabold text-slate-800 mb-8 tracking-tight">
-          {viewMode === 'admin' ? '코트 및 대기 배정' : '🏸 현재 코트 현황'}
+          {viewMode === 'admin' ? '코트 및 대기 배정' : '코트 현황'}
         </h1>
         
         <div className={`grid gap-6 ${viewMode === 'user' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-7xl mx-auto' : 'grid-cols-1 lg:grid-cols-2 xl:grid-cols-4'}`}>
