@@ -216,6 +216,15 @@ export default function Home() {
 
   // 경기 종료 버튼 클릭 이벤트
   const finishGame = async (slotId: string) => {
+    
+    // 해당 코트에 있는 인원 확인
+    const courtPlayers = players.filter(p => p.status === slotId);
+    
+    // 4명이 아닌 경우
+    if (courtPlayers.length !== 4) {
+      return alert('경기 코트에 4명이 없습니다.');
+    }
+
     const updatedPlayers = players.map(p => {
       if (p.status === slotId) return { ...p, status: 'lobby', count: p.count + 1 };
       if (p.status === 'wait-1') return { ...p, status: slotId };
