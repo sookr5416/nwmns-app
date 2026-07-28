@@ -18,10 +18,10 @@ const COURT_SLOTS = [
   { id: 'court-2', title: '코트 2', type: 'court' },
   { id: 'court-3', title: '코트 3', type: 'court' },
   { id: 'court-4', title: '코트 4', type: 'court' },
-  { id: 'wait-1', title: '대기 1', type: 'wait' },
-  { id: 'wait-2', title: '대기 2', type: 'wait' },
-  { id: 'wait-3', title: '대기 3', type: 'wait' },
-  { id: 'wait-4', title: '대기 4', type: 'wait' },
+  { id: 'wait-1',  title: '대기 1', type: 'wait' },
+  { id: 'wait-2',  title: '대기 2', type: 'wait' },
+  { id: 'wait-3',  title: '대기 3', type: 'wait' },
+  { id: 'wait-4',  title: '대기 4', type: 'wait' },
 ];
 
 export default function Home() {
@@ -30,6 +30,8 @@ export default function Home() {
   
   // 관리자 로그인 팝업 상태
   const [showLogin, setShowLogin] = useState(false);
+  const [isRegOpen, setIsRegOpen] = useState(true);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [loginId, setLoginId] = useState('');
   const [loginPw, setLoginPw] = useState('');
 
@@ -94,10 +96,13 @@ export default function Home() {
   const handleRegister = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!name.trim()) return alert('이름을 입력해주세요.');
-    if (!age.trim()) return alert('나이를 입력해주세요.');
+    if (!age.trim()) return alert('출생년도를 입력해주세요.');
 
     const isDuplicate = players.some(
-      (p) => p.name === name.trim() && p.age === age && p.gender === gender
+      (p) => 
+        p.name.trim() === name.trim() && 
+        String(p.age) === String(age) &&
+        p.gender === gender
     );
 
     if (isDuplicate) return alert('이미 동일한 정보(이름, 나이, 성별)로 등록된 선수가 있습니다.');
@@ -163,6 +168,41 @@ export default function Home() {
     await supabase.from('players').update({ status: targetSlotId }).eq('id', playerId);
   };
 
+  const handlePlayerClick = (playerId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (viewMode !== 'admin') return;
+
+    // 이미 선택된 선수를 다시 누르면 선택 해제, 아니면 새롭게 선택
+    setSelectedPlayerId((prev) => (prev === playerId ? null : playerId));
+  };
+
+  // 코트나 로비 빈 공간을 클릭했을 때
+  const handleSlotClick = async (targetSlotId: string) => {
+    if (viewMode !== 'admin' || !selectedPlayerId) return;
+
+    const playerId = selectedPlayerId;
+    const currentPlayer = players.find(p => p.id === playerId);
+    
+    if (!currentPlayer || currentPlayer.status === targetSlotId) {
+      setSelectedPlayerId(null);
+      return;
+    }
+
+    if (targetSlotId !== 'lobby') {
+      const playersInTarget = players.filter(p => p.status === targetSlotId);
+      if (playersInTarget.length >= 4) {
+        alert('최대 4명까지만 배치할 수 있습니다.');
+        setSelectedPlayerId(null);
+        return;
+      }
+    }
+    
+    // 이동 처리
+    setPlayers(players.map(p => p.id === playerId ? { ...p, status: targetSlotId } : p));
+    setSelectedPlayerId(null); // 이동 후 선택 해제
+    await supabase.from('players').update({ status: targetSlotId }).eq('id', playerId);
+  };
+
   // 초기화 버튼 클릭 이벤트
   const resetSlot = async (slotId: string) => {
     const updatedPlayers = players.map(p => p.status === slotId ? { ...p, status: 'lobby' } : p);
@@ -202,7 +242,7 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-800 font-sans relative">
+    <div className="flex flex-col md:flex-row h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
       
       {/* 관리자 로그인 팝업 (모달) */}
       {showLogin && (
@@ -237,34 +277,48 @@ export default function Home() {
         </div>
       )}
 
-      {/* ================= 좌측: 선수 등록 및 목록 패널 (관리자 모드만 표시) ================= */}
+      {/* ================= 좌측/하단: 선수 등록 및 목록 패널 (관리자 모드만 표시) ================= */}
       {viewMode === 'admin' && (
-        <div className="w-83 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col shadow-xl z-10">
-          <div className="p-6 border-b border-slate-100">
-            <h2 className="text-xl font-bold mb-5 text-slate-800">선수 등록</h2>
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div className="space-y-2">
-                <input type="text" placeholder="이름" value={name} onChange={(e) => setName(e.target.value)} ref={nameInputRef} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" />
-                <input type="number" placeholder="나이" value={age} onChange={(e) => setAge(e.target.value)} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" />
-              </div>
+        <div className="order-2 md:order-1 w-full md:w-80 h-[45vh] md:h-full flex-shrink-0 bg-white border-t md:border-t-0 md:border-r border-slate-200 flex flex-col shadow-[0_-5px_15px_rgba(0,0,0,0.05)] md:shadow-xl z-20">
+          <div className="p-4 md:p-6 border-b border-slate-100">
+            {/* 제목 및 접기/펼치기 버튼 */}
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold text-slate-800">선수 등록</h2>
+              <button 
+                type="button"
+                onClick={() => setIsRegOpen(!isRegOpen)}
+                className="text-sm font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-md hover:bg-indigo-100 transition-colors"
+              >
+                {isRegOpen ? '접기 ▲' : '펼치기 ▼'}
+              </button>
+            </div>
 
-              <div className="flex gap-2">
-                {['남', '여'].map((g) => (
-                  <button key={g} type="button" onClick={() => setGender(g)} className={`flex-1 py-2 rounded-lg font-medium transition-colors ${gender === g ? 'bg-indigo-100 text-indigo-700 border-2 border-indigo-500' : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'}`}>{g}</button>
-                ))}
-              </div>
+            {/* 폼 영역 (이름부터 등록하기 버튼까지) - isRegOpen이 true일 때만 렌더링됨 */}
+            {isRegOpen && (
+              <form onSubmit={handleRegister} className="space-y-4 mt-5">
+                <div className="space-y-2">
+                  <input type="text" placeholder="이름" value={name} onChange={(e) => setName(e.target.value)} ref={nameInputRef} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" />
+                  <input type="number" placeholder="출생년도" value={age} onChange={(e) => setAge(e.target.value)} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" />
+                </div>
 
-              <div className="flex flex-wrap gap-2">
-                {['A', 'B', 'C', 'D', 'E', 'F'].map((lvl) => (
-                  <button key={lvl} type="button" onClick={() => setGrade(lvl)} className={`w-10 h-10 rounded-lg font-bold transition-colors flex items-center justify-center ${grade === lvl ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'}`}>{lvl}</button>
-                ))}
-              </div>
+                <div className="flex gap-2">
+                  {['남', '여'].map((g) => (
+                    <button key={g} type="button" onClick={() => setGender(g)} className={`flex-1 py-2 rounded-lg font-medium transition-colors ${gender === g ? 'bg-indigo-100 text-indigo-700 border-2 border-indigo-500' : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'}`}>{g}</button>
+                  ))}
+                </div>
 
-              <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md shadow-indigo-200 transition-all active:scale-[0.98]">등록하기</button>
-            </form>
+                <div className="flex flex-wrap gap-2">
+                  {['A', 'B', 'C', 'D', 'E', 'F'].map((lvl) => (
+                    <button key={lvl} type="button" onClick={() => setGrade(lvl)} className={`w-10 h-10 rounded-lg font-bold transition-colors flex items-center justify-center ${grade === lvl ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100'}`}>{lvl}</button>
+                  ))}
+                </div>
+
+                <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md shadow-indigo-200 transition-all active:scale-[0.98]">등록하기</button>
+              </form>
+            )}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'lobby')}>
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'lobby')} onClick={() => handleSlotClick('lobby')}>
             <h3 className="text-sm font-bold text-slate-500 mb-3 flex justify-between items-center">
               전체 대기 선수 (로비) 
               <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs">
@@ -274,7 +328,7 @@ export default function Home() {
             
             <ul className="space-y-2 min-h-[200px]">
               {players.filter(p => p.status === 'lobby').map((player) => (
-                <li key={player.id} draggable onDragStart={(e) => handleDragStart(e, player.id)} className={`flex items-center justify-between border p-3 rounded-lg shadow-sm cursor-grab active:cursor-grabbing transition-colors group ${player.gender === '남' ? 'bg-blue-50 border-blue-200 hover:border-blue-400' : 'bg-yellow-50 border-yellow-200 hover:border-yellow-400'}`}>
+                <li key={player.id} draggable onDragStart={(e) => handleDragStart(e, player.id)} onClick={(e) => handlePlayerClick(player.id, e)} className={`flex items-center justify-between border p-3 rounded-lg shadow-sm transition-all group ${viewMode === 'admin' ? 'cursor-pointer' : ''} ${player.gender === '남' ? 'bg-blue-50 border-blue-200 hover:border-blue-400' : 'bg-yellow-50 border-yellow-200 hover:border-yellow-400'} ${selectedPlayerId === player.id ? 'ring-4 ring-indigo-500 scale-[1.02]' : ''}`}>
                   <div className="flex items-center gap-3">
                     <div className="text-slate-300 group-hover:text-indigo-400">
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z"></path></svg>
@@ -297,11 +351,11 @@ export default function Home() {
         </div>
       )}
 
-      {/* ================= 우측: 코트 & 대기 배정 패널 ================= */}
-      <div className="flex-1 overflow-y-auto p-8 relative">
+      {/* ================= 우측/상단: 코트 & 대기 배정 패널 ================= */}
+      <div className="order-1 md:order-2 flex-1 overflow-y-auto p-4 md:p-8 relative">
         
         {/* ================= 우측 상단 컨트롤 패널 ================= */}
-        <div className="absolute top-8 right-8 flex items-center gap-4 z-10">
+        <div className="absolute top-4 right-4 md:top-8 md:right-8 flex items-center gap-2 md:gap-4 z-10 scale-90 md:scale-100 origin-top-right">
           
           {/* 하루 마감 버튼 (관리자 모드일 때만 토글 버튼 왼쪽에 표시) */}
           {viewMode === 'admin' && (
@@ -333,7 +387,7 @@ export default function Home() {
           </div>
         </div>
 
-        <h1 className="text-3xl font-extrabold text-slate-800 mb-8 tracking-tight">
+        <h1 className="text-2xl md:text-3xl font-extrabold text-slate-800 mb-6 md:mb-8 mt-12 md:mt-0 tracking-tight">
           {viewMode === 'admin' ? '코트 및 대기 배정' : '코트 현황'}
         </h1>
         
@@ -353,9 +407,10 @@ export default function Home() {
                 </div>
 
                 <div 
-                  className={`flex-1 p-4 flex flex-col gap-2 min-h-[160px] ${slotPlayers.length === 0 ? 'justify-center items-center' : ''}`}
+                  className={`flex-1 p-4 flex flex-col gap-2 min-h-[160px] ${slotPlayers.length === 0 ? 'justify-center items-center' : ''} ${selectedPlayerId ? 'cursor-pointer hover:bg-indigo-50/50' : ''}`}
                   onDragOver={viewMode === 'admin' ? handleDragOver : undefined}
                   onDrop={viewMode === 'admin' ? (e) => handleDrop(e, slot.id) : undefined}
+                  onClick={() => handleSlotClick(slot.id)}
                 >
                   {slotPlayers.length === 0 ? (
                     <div className="text-slate-300 text-sm font-medium border-2 border-dashed border-slate-200 rounded-lg w-full h-full flex items-center justify-center bg-slate-50/50">
@@ -367,11 +422,12 @@ export default function Home() {
                         key={p.id} 
                         draggable={viewMode === 'admin'}
                         onDragStart={viewMode === 'admin' ? (e) => handleDragStart(e, p.id) : undefined}
-                        className={`border px-3 py-2 rounded-md flex justify-between items-center transition-colors ${viewMode === 'admin' ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} ${
+                        onClick={(e) => handlePlayerClick(p.id, e)}
+                        className={`border px-3 py-2 rounded-md flex justify-between items-center transition-all ${viewMode === 'admin' ? 'cursor-pointer' : 'cursor-default'} ${
                           p.gender === '남'
                             ? 'bg-blue-50 border-blue-200 hover:border-blue-300' 
                             : 'bg-yellow-50 border-yellow-200 hover:border-yellow-300' 
-                        }`}
+                        } ${selectedPlayerId === p.id ? 'ring-4 ring-indigo-500 scale-105 shadow-md' : ''}`}
                       >
                         <span className="font-bold text-slate-800">
                           {p.name} <span className="text-sm font-normal text-slate-500"></span>
@@ -405,7 +461,6 @@ export default function Home() {
           })}
         </div>
       </div>
-
     </div>
   );
 }
