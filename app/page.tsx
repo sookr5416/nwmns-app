@@ -183,7 +183,11 @@ export default function Home() {
     const currentPlayer = players.find(p => p.id === playerId);
     if (!currentPlayer || currentPlayer.status === targetSlotId) return;
 
-    if (targetSlotId !== 'lobby') {
+    // 이동하려는 타겟 코트의 정보 찾기
+    const targetCourt = courts.find(c => c.id === targetSlotId);
+
+    // 로비가 아니고, 레슨 코트(type === 'lesson')도 아닐 때만 4명 제한 검사!
+    if (targetSlotId !== 'lobby' && targetCourt?.type !== 'lesson') {
       const playersInTarget = players.filter(p => p.status === targetSlotId);
       if (playersInTarget.length >= 4) {
         return alert('최대 4명까지만 배치할 수 있습니다.');
@@ -214,7 +218,11 @@ export default function Home() {
       return;
     }
 
-    if (targetSlotId !== 'lobby') {
+    // 이동하려는 타겟 코트의 정보 찾기
+    const targetCourt = courts.find(c => c.id === targetSlotId);
+
+    // 로비가 아니고, 레슨 코트(type === 'lesson')도 아닐 때만 4명 제한 검사!
+    if (targetSlotId !== 'lobby' && targetCourt?.type !== 'lesson') {
       const playersInTarget = players.filter(p => p.status === targetSlotId);
       if (playersInTarget.length >= 4) {
         alert('최대 4명까지만 배치할 수 있습니다.');
@@ -225,7 +233,7 @@ export default function Home() {
     
     // 이동 처리
     setPlayers(players.map(p => p.id === playerId ? { ...p, status: targetSlotId } : p));
-    setSelectedPlayerId(null); // 이동 후 선택 해제
+    setSelectedPlayerId(null); 
     await supabase.from('players').update({ status: targetSlotId }).eq('id', playerId);
   };
 
@@ -392,7 +400,10 @@ export default function Home() {
             </h3>
             
             <ul className="space-y-2 min-h-[200px]">
-              {players.filter(p => p.status === 'lobby').map((player) => (
+              {players
+                .filter(p => p.status === 'lobby')
+                .sort((a, b) => a.count - b.count) 
+                .map((player) => (
                 <li key={player.id} draggable onDragStart={(e) => handleDragStart(e, player.id)} onClick={(e) => handlePlayerClick(player.id, e)} className={`flex items-center justify-between border p-3 rounded-lg shadow-sm transition-all group ${viewMode === 'admin' ? 'cursor-pointer' : ''} ${player.gender === '남' ? 'bg-blue-50 border-blue-200 hover:border-blue-400' : 'bg-yellow-50 border-yellow-200 hover:border-yellow-400'} ${selectedPlayerId === player.id ? 'ring-4 ring-indigo-500 scale-[1.02]' : ''}`}>
                   <div className="flex items-center gap-3">
                     <div className="text-slate-300 group-hover:text-indigo-400">
@@ -458,14 +469,19 @@ export default function Home() {
         
         <div className={`grid gap-6 ${viewMode === 'user' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-7xl mx-auto' : 'grid-cols-1 lg:grid-cols-2 xl:grid-cols-4'}`}>
           {courts.map((slot) => {
+            // 사용자 뷰어일 때 레슨 코트는 화면에서 아예 숨김 처리
+            if (viewMode === 'user' && slot.type === 'lesson') return null;
+
             const slotPlayers = players.filter(p => p.status === slot.id);
             const isCourt = slot.type === 'court';
+            const isLesson = slot.type === 'lesson'; // 레슨 코트 구분
             
             return (
               <div key={slot.id} className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden transition-all hover:shadow-md">
                 
-                <div className={`${isCourt ? 'bg-slate-800' : 'bg-indigo-500'} px-4 py-3 flex justify-between items-center`}>
-                  {/* 👇 관리자 & 경기 코트일 때 입력칸 표시 */}
+                {/* 레슨 코트는 눈에 띄게 초록색(bg-emerald-600)으로 표시했습니다 */}
+                <div className={`${isCourt ? 'bg-slate-800' : isLesson ? 'bg-emerald-600' : 'bg-indigo-500'} px-4 py-3 flex justify-between items-center`}>
+                  
                   {viewMode === 'admin' && isCourt ? (
                     <input
                       type="text"
@@ -479,8 +495,9 @@ export default function Home() {
                     <h3 className="text-white font-bold text-lg">{slot.title}</h3>
                   )}
 
-                  <span className={`text-sm font-bold ${slotPlayers.length >= 4 ? 'text-red-300' : 'text-slate-200'}`}>
-                    {slotPlayers.length} / 4 명
+                  <span className={`text-sm font-bold ${(!isLesson && slotPlayers.length >= 4) ? 'text-red-300' : 'text-slate-200'}`}>
+                    {/* 레슨 코트는 '/ 4명' 제한 문구 없이 현재 들어간 인원만 표시 */}
+                    {isLesson ? `${slotPlayers.length} 명` : `${slotPlayers.length} / 4 명`}
                   </span>
                 </div>
 
