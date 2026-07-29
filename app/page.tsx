@@ -344,7 +344,7 @@ export default function Home() {
 
       {/* ================= 좌측/하단: 선수 등록 및 목록 패널 (관리자 모드만 표시) ================= */}
       {viewMode === 'admin' && (
-        <div className="order-2 md:order-1 w-full md:w-80 h-[45vh] md:h-full flex-shrink-0 bg-white border-t md:border-t-0 md:border-r border-slate-200 flex flex-col shadow-[0_-5px_15px_rgba(0,0,0,0.05)] md:shadow-xl z-20">
+        <div className="order-2 md:order-1 w-full md:w-83 h-[45vh] md:h-full flex-shrink-0 bg-white border-t md:border-t-0 md:border-r border-slate-200 flex flex-col shadow-[0_-5px_15px_rgba(0,0,0,0.05)] md:shadow-xl z-20">
           <div className="p-4 md:p-6 border-b border-slate-100">
             {/* 제목 및 접기/펼치기 버튼 */}
             <div className="flex justify-between items-center">
@@ -441,13 +441,13 @@ export default function Home() {
               onClick={() => { if(viewMode !== 'admin') setShowLogin(true); }}
               className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${viewMode === 'admin' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
-              관리자 모드
+              관리자
             </button>
             <button 
               onClick={() => setViewMode('user')}
               className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${viewMode === 'user' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
-              사용자 뷰어
+              사용자
             </button>
           </div>
         </div>
