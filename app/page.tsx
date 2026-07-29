@@ -221,6 +221,12 @@ export default function Home() {
   };
 
   const handleDayClose = async () => {
+    // 타이머가 켜져있는 코트가 있는 경우
+    const isGamePlaying = courts.some(court => court.start_time);
+    if (isGamePlaying) {
+      return alert('현재 진행 중인 경기가 있습니다.\n모든 코트의 경기를 완전히 종료한 후 마감해주세요.');
+    }
+    
     if (players.length === 0) return alert('전송할 선수 데이터가 없습니다.');
     
     if (confirm('오늘의 모임을 마감하고 구글 시트로 데이터를 전송하시겠습니까?\n(※ 저장 후 현재 등록된 모든 선수 데이터는 초기화됩니다.)')) {
