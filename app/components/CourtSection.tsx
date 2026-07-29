@@ -1,0 +1,209 @@
+'use client';
+
+import { DragEvent } from 'react';
+import { Player, Court } from '../types';
+
+interface CourtSectionProps {
+  viewMode: 'admin' | 'user';
+  courts: Court[];
+  players: Player[];
+  selectedPlayerId: string | null;
+  processingCourtId: string | null;
+  formatTime: (startTime: number) => number | string;
+  handleCourtRenameChange: (id: string, newTitle: string) => void;
+  handleCourtRenameSave: (id: string, newTitle: string) => void;
+  handleDragOver: (e: DragEvent<HTMLDivElement>) => void;
+  handleDrop: (e: DragEvent<HTMLDivElement>, targetSlotId: string) => void;
+  handleSlotClick: (targetSlotId: string) => void;
+  handleDragStart: (e: DragEvent<HTMLElement>, playerId: string) => void;
+  handlePlayerClick: (playerId: string, e: React.MouseEvent) => void;
+  resetSlot: (slotId: string) => void;
+  finishGame: (slotId: string) => void;
+  startGame: (slotId: string) => void;
+  isFinishingRef: React.MutableRefObject<Record<string, boolean>>;
+  handleDayClose: () => void;
+  setShowLogin: (show: boolean) => void;
+  setViewMode: (mode: 'admin' | 'user') => void;
+}
+
+export default function CourtSection({
+  viewMode,
+  courts,
+  players,
+  selectedPlayerId,
+  processingCourtId,
+  formatTime,
+  handleCourtRenameChange,
+  handleCourtRenameSave,
+  handleDragOver,
+  handleDrop,
+  handleSlotClick,
+  handleDragStart,
+  handlePlayerClick,
+  resetSlot,
+  finishGame,
+  startGame,
+  isFinishingRef,
+  handleDayClose,
+  setShowLogin,
+  setViewMode,
+}: CourtSectionProps) {
+  return (
+    <div className="order-1 md:order-2 flex-1 flex flex-col h-full overflow-y-auto p-4 md:p-8 bg-slate-50 relative">
+      
+      {/* 🌟 상단 헤더 및 컨트롤 버튼 영역 (플렉스로 안전하게 배치) */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
+        <h1 className="text-2xl md:text-3xl font-extrabold text-slate-800 tracking-tight">
+          {viewMode === 'admin' ? '코트 및 대기 배정' : '코트 현황'}
+        </h1>
+
+        <div className="flex items-center gap-2 md:gap-4 self-end md:self-auto">
+          {viewMode === 'admin' && (
+            <button 
+              onClick={handleDayClose} 
+              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-bold rounded-lg shadow-md shadow-red-200 transition-colors flex items-center gap-2 active:scale-95"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              경기 종료 (구글 시트로 이동)
+            </button>
+          )}
+
+          <div className="flex bg-slate-200 p-1 rounded-lg">
+            <button 
+              onClick={() => { if(viewMode !== 'admin') setShowLogin(true); }} 
+              className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${viewMode === 'admin' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              관리자
+            </button>
+            <button 
+              onClick={() => setViewMode('user')} 
+              className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${viewMode === 'user' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              사용자
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      {/* 코트 카드 그리드 목록 */}
+      <div className={`grid gap-6 ${viewMode === 'user' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-7xl mx-auto w-full' : 'grid-cols-1 lg:grid-cols-2 xl:grid-cols-4'}`}>
+        {courts.map((slot) => {
+          if (viewMode === 'user' && slot.type === 'lesson') return null;
+
+          const slotPlayers = players.filter(p => p.status === slot.id);
+          const isCourt = slot.type === 'court';
+          const isLesson = slot.type === 'lesson';
+          
+          return (
+            <div key={slot.id} className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden transition-all hover:shadow-md">
+              <div className={`${isCourt ? 'bg-slate-800' : isLesson ? 'bg-emerald-600' : 'bg-indigo-500'} px-4 py-3 flex justify-between items-center`}>
+                {viewMode === 'admin' && isCourt ? (
+                  <input
+                    type="text"
+                    value={slot.title}
+                    onChange={(e) => handleCourtRenameChange(slot.id, e.target.value)}
+                    onBlur={(e) => handleCourtRenameSave(slot.id, e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                    className="bg-transparent text-white font-bold text-lg focus:outline-none border-b-2 border-dashed border-white/50 w-28 px-1 placeholder-white/50"
+                  />
+                ) : (
+                  <h3 className="text-white font-bold text-lg">{slot.title}</h3>
+                )}
+
+                <span className={`text-sm font-bold ${(!isLesson && slotPlayers.length >= 4) ? 'text-red-300' : 'text-slate-200'}`}>
+                  {isLesson ? `${slotPlayers.length} 명` : `${slotPlayers.length} / 4 명`}
+                </span>
+              </div>
+
+              <div 
+                className={`flex-1 p-4 flex flex-col gap-2 min-h-[240px] ${slotPlayers.length === 0 ? 'justify-center items-center' : ''} ${selectedPlayerId ? 'cursor-pointer hover:bg-indigo-50/50' : ''}`}
+                onDragOver={viewMode === 'admin' ? handleDragOver : undefined}
+                onDrop={viewMode === 'admin' ? (e) => handleDrop(e, slot.id) : undefined}
+                onClick={() => handleSlotClick(slot.id)}
+              >
+                {slotPlayers.length === 0 ? (
+                  <div className="text-slate-300 text-sm font-medium border-2 border-dashed border-slate-200 rounded-lg w-full h-full flex items-center justify-center bg-slate-50/50 pointer-events-none">
+                    {viewMode === 'admin' ? '선수를 드래그하세요' : '비어 있음'}
+                  </div>
+                ) : (
+                  slotPlayers.map(p => (
+                    <div 
+                      key={p.id} 
+                      draggable={viewMode === 'admin' && !slot.start_time}
+                      onDragStart={viewMode === 'admin' ? (e) => handleDragStart(e, p.id) : undefined}
+                      onClick={(e) => handlePlayerClick(p.id, e)}
+                      className={`border px-3 py-2 rounded-md flex justify-between items-center transition-all ${
+                        viewMode === 'admin' && !slot.start_time ? 'cursor-pointer hover:-translate-y-0.5' : 'cursor-default opacity-80'
+                      } ${
+                        p.gender === '남'
+                          ? 'bg-blue-50 border-blue-200 hover:border-blue-300' 
+                          : 'bg-yellow-50 border-yellow-200 hover:border-yellow-300' 
+                      } ${selectedPlayerId === p.id ? 'ring-4 ring-indigo-500 scale-105 shadow-md' : ''}`}
+                    >
+                      <span className="font-bold text-slate-800">{p.name}</span>
+                      <span className={`text-xs font-bold px-2 py-1 rounded ${p.gender === '남' ? 'text-blue-700 bg-blue-200' : 'text-yellow-800 bg-yellow-200'}`}>
+                        {p.grade}조
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {viewMode === 'admin' && (
+                <div 
+                  className="p-4 border-t border-slate-100 flex gap-2 bg-slate-50 mt-auto"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button 
+                    onClick={() => resetSlot(slot.id)} 
+                    disabled={!!slot.start_time} 
+                    className={`flex-1 py-2 bg-white border rounded-lg font-medium transition-colors text-sm ${
+                      slot.start_time
+                        ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50' 
+                        : 'border-slate-300 text-slate-600 hover:bg-slate-100' 
+                    }`}
+                  >
+                    초기화
+                  </button>
+                  {isCourt && (
+                    <button 
+                      onClick={() => {
+                        if (isFinishingRef.current[slot.id]) return;
+                        if (slot.start_time) {
+                          finishGame(slot.id);
+                        } else {
+                          startGame(slot.id);
+                        }
+                      }} 
+                      disabled={processingCourtId === slot.id} 
+                      className={`flex-1 py-2 text-white rounded-lg font-bold transition-colors shadow-sm text-sm flex items-center justify-center gap-2 ${
+                        processingCourtId === slot.id
+                          ? 'bg-slate-400 cursor-not-allowed' 
+                          : slot.start_time 
+                            ? 'bg-red-500 hover:bg-red-600 shadow-red-200' 
+                            : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
+                      }`}
+                    >
+                      {processingCourtId === slot.id ? (
+                        '처리 중...'
+                      ) : slot.start_time ? (
+                        <>
+                          <span className="w-2 h-2 rounded-full bg-red-200 animate-pulse"></span>
+                          종료 ({formatTime(slot.start_time)})
+                        </>
+                      ) : (
+                        '경기 시작'
+                      )}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
