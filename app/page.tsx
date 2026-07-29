@@ -18,6 +18,7 @@ interface Court {
   title: string;
   type: string;
   order_idx: number;
+  start_time?: number | null;
 }
 
 export default function Home() {
@@ -39,6 +40,24 @@ export default function Home() {
   const [courts, setCourts] = useState<Court[]>([]);
 
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const [now, setNow] = useState(Date.now());
+  const [processingCourtId, setProcessingCourtId] = useState<string | null>(null);
+
+  const isFinishingRef = useRef<Record<string, boolean>>({}); // 리액트 렌더링과 무관하게 즉시 잠그는 절대 자물쇠 (Ref)
+
+  // 1초마다 화면의 시간을 갱신하는 타이머
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // 밀리초를 분:초(MM:SS) 형식으로 바꿔주는 함수
+  const formatTime = (startTime: number) => {
+    const diff = Math.floor((now - startTime) / 1000);
+    const m = String(Math.floor(diff / 60)).padStart(2, '0');
+    const s = String(diff % 60).padStart(2, '0');
+    return `${m}:${s}`;
+  };
 
   useEffect(() => {
     fetchPlayers();
@@ -169,6 +188,14 @@ export default function Home() {
   };
 
   const handleDragStart = (e: DragEvent<HTMLElement>, playerId: string) => {
+    const player = players.find(p => p.id === playerId);
+    const playerCourt = courts.find(c => c.id === player?.status);
+
+    // 진행 중인 경기 코트의 선수라면 드래그 취소
+    if (player && playerCourt?.start_time) {
+      e.preventDefault();
+      return;
+    }
     e.dataTransfer.setData('playerId', playerId);
   };
 
@@ -201,6 +228,15 @@ export default function Home() {
   const handlePlayerClick = (playerId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (viewMode !== 'admin') return;
+
+    const player = players.find(p => p.id === playerId);
+    const playerCourt = courts.find(c => c.id === player?.status);
+
+    // 타이머가 켜져있는(진행 중인) 경기 코트의 선수라면 선택(클릭) 방지
+    if (player && playerCourt?.start_time) {
+      alert('진행 중인 경기에서는 선수를 뺄 수 없습니다.\n(변경이 필요하다면 먼저 코트를 [초기화] 해주세요.)');
+      return;
+    }
 
     // 이미 선택된 선수를 다시 누르면 선택 해제, 아니면 새롭게 선택
     setSelectedPlayerId((prev) => (prev === playerId ? null : playerId));
@@ -242,39 +278,70 @@ export default function Home() {
     const updatedPlayers = players.map(p => p.status === slotId ? { ...p, status: 'lobby' } : p);
     setPlayers(updatedPlayers);
 
+    await supabase.from('courts').update({ start_time: null }).eq('id', slotId);
+
     const changedPlayers = updatedPlayers.filter((p, i) => p.status !== players[i].status);
     if (changedPlayers.length > 0) {
       await supabase.from('players').upsert(changedPlayers);
     }
   };
+  
+  // 경기 시작 버튼 클릭 이벤트
+  const startGame = async (slotId: string) => {
+    const courtPlayers = players.filter(p => p.status === slotId);
+    if (courtPlayers.length !== 4) {
+      return alert('코트에 4명이 모두 모여야 경기를 시작할 수 있습니다.');
+    }
+    
+    // 경기 시작을 누르는 순간, 혹시라도 선택되어 있던 선수가 있다면 선택 상태를 즉시 해제!
+    setSelectedPlayerId(null);
+
+    await supabase.from('courts').update({ start_time: Date.now() }).eq('id', slotId);
+  };
 
   // 경기 종료 버튼 클릭 이벤트
   const finishGame = async (slotId: string) => {
-    
-    // 해당 코트에 있는 인원 확인
+    // 1차 방어: 절대 자물쇠가 잠겨있으면 실행조차 안 함 (더블클릭 원천 차단)
+    if (isFinishingRef.current[slotId]) return;
+
+    const court = courts.find(c => c.id === slotId);
+    if (!court?.start_time) return; 
+
     const courtPlayers = players.filter(p => p.status === slotId);
-    
-    // 4명이 아닌 경우
-    if (courtPlayers.length !== 4) {
-      return alert('경기 코트에 4명이 없습니다.');
+    if (courtPlayers.length !== 4) return alert('경기 코트에 4명이 없습니다.');
+
+    // 자물쇠 잠금 (이 순간부터 다른 클릭은 무조건 무시됨)
+    isFinishingRef.current[slotId] = true;
+    setProcessingCourtId(slotId);
+
+    try {
+      // DB에서 타이머 먼저 지우기
+      await supabase.from('courts').update({ start_time: null }).eq('id', slotId);
+
+      // 선수들 자리 이동 및 게임 수 증가 계산
+      const updatedPlayers = players.map(p => {
+        if (p.status === slotId) return { ...p, status: 'lobby', count: p.count + 1 };
+        if (p.status === 'wait-1') return { ...p, status: slotId };
+        if (p.status === 'wait-2') return { ...p, status: 'wait-1'};
+        if (p.status === 'wait-3') return { ...p, status: 'wait-2'};
+        if (p.status === 'wait-4') return { ...p, status: 'wait-3'};
+        return p;
+      });
+
+      setPlayers(updatedPlayers);
+
+      const changedPlayers = updatedPlayers.filter((p, i) => p.status !== players[i].status || p.count !== players[i].count);
+      if (changedPlayers.length > 0) {
+        await supabase.from('players').upsert(changedPlayers);
+      }
+    } finally {
+      // 처리가 끝난 후에도 1초 동안은 잠금을 유지하여 실시간 구독이 꼬이는 것 방지
+      setTimeout(() => {
+        isFinishingRef.current[slotId] = false;
+        setProcessingCourtId(null);
+      }, 1000);
     }
-
-    const updatedPlayers = players.map(p => {
-      if (p.status === slotId) return { ...p, status: 'lobby', count: p.count + 1 };
-      if (p.status === 'wait-1') return { ...p, status: slotId };
-      if (p.status === 'wait-2') return { ...p, status: 'wait-1'};
-      if (p.status === 'wait-3') return { ...p, status: 'wait-2'};
-      if (p.status === 'wait-4') return { ...p, status: 'wait-3'};
-      return p;
-    });
-
-    setPlayers(updatedPlayers);
-
-    const changedPlayers = updatedPlayers.filter((p, i) => p.status !== players[i].status || p.count !== players[i].count);
-    if (changedPlayers.length > 0) {
-      await supabase.from('players').upsert(changedPlayers);
-    }
-  }
+  };
 
   // 경기 종료 (구글 시트로 이동) 버튼 클릭 이벤트
   const handleDayClose = async () => {
@@ -515,10 +582,14 @@ export default function Home() {
                     slotPlayers.map(p => (
                       <div 
                         key={p.id} 
-                        draggable={viewMode === 'admin'}
+                        // 타이머가 켜진 상태(진행 중)면 드래그 불가(false)로 변경
+                        draggable={viewMode === 'admin' && !slot.start_time}
                         onDragStart={viewMode === 'admin' ? (e) => handleDragStart(e, p.id) : undefined}
                         onClick={(e) => handlePlayerClick(p.id, e)}
-                        className={`border px-3 py-2 rounded-md flex justify-between items-center transition-all ${viewMode === 'admin' ? 'cursor-pointer' : 'cursor-default'} ${
+                        // 타이머가 켜져 있으면 마우스 커서를 일반 모양(cursor-default)으로 바꾸고 살짝 투명도(opacity-80)를 줍니다.
+                        className={`border px-3 py-2 rounded-md flex justify-between items-center transition-all ${
+                          viewMode === 'admin' && !slot.start_time ? 'cursor-pointer hover:-translate-y-0.5' : 'cursor-default opacity-80'
+                        } ${
                           p.gender === '남'
                             ? 'bg-blue-50 border-blue-200 hover:border-blue-300' 
                             : 'bg-yellow-50 border-yellow-200 hover:border-yellow-300' 
@@ -541,12 +612,40 @@ export default function Home() {
 
                 {viewMode === 'admin' && (
                   <div className="p-4 border-t border-slate-100 flex gap-2 bg-slate-50 mt-auto">
-                    <button onClick={() => resetSlot(slot.id)} className="flex-1 py-2 bg-white border border-slate-300 text-slate-600 rounded-lg font-medium hover:bg-slate-100 transition-colors text-sm">
+                    <button 
+                      onClick={() => resetSlot(slot.id)} 
+                      disabled={!!slot.start_time} // 타이머가 켜져있으면 버튼 비활성화
+                      className={`flex-1 py-2 bg-white border rounded-lg font-medium transition-colors text-sm ${
+                        slot.start_time
+                          ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50' // 비활성화 시 스타일 (회색)
+                          : 'border-slate-300 text-slate-600 hover:bg-slate-100' // 평소 스타일
+                      }`}
+                    >
                       초기화
                     </button>
                     {isCourt && (
-                      <button onClick={() => finishGame(slot.id)} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200 text-sm">
-                        경기 종료
+                      <button 
+                        onClick={() => slot.start_time ? finishGame(slot.id) : startGame(slot.id)} 
+                        // 현재 이 코트가 처리 중이라면 클릭을 막음!
+                        disabled={processingCourtId === slot.id} 
+                        className={`flex-1 py-2 text-white rounded-lg font-bold transition-colors shadow-sm text-sm flex items-center justify-center gap-2 ${
+                          processingCourtId === slot.id
+                            ? 'bg-slate-400 cursor-not-allowed' // 처리 중일 때는 회색으로 변경
+                            : slot.start_time 
+                              ? 'bg-red-500 hover:bg-red-600 shadow-red-200' 
+                              : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
+                        }`}
+                      >
+                        {processingCourtId === slot.id ? (
+                          '처리 중...'
+                        ) : slot.start_time ? (
+                          <>
+                            <span className="w-2 h-2 rounded-full bg-red-200 animate-pulse"></span>
+                            종료 ({formatTime(slot.start_time)})
+                          </>
+                        ) : (
+                          '경기 시작'
+                        )}
                       </button>
                     )}
                   </div>
