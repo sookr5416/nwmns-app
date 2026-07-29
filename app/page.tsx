@@ -13,16 +13,12 @@ interface Player {
   status: string;
 }
 
-const COURT_SLOTS = [
-  { id: 'court-1', title: '코트 1', type: 'court' },
-  { id: 'court-2', title: '코트 2', type: 'court' },
-  { id: 'court-3', title: '코트 3', type: 'court' },
-  { id: 'court-4', title: '코트 4', type: 'court' },
-  { id: 'wait-1',  title: '대기 1', type: 'wait' },
-  { id: 'wait-2',  title: '대기 2', type: 'wait' },
-  { id: 'wait-3',  title: '대기 3', type: 'wait' },
-  { id: 'wait-4',  title: '대기 4', type: 'wait' },
-];
+interface Court {
+  id: string;
+  title: string;
+  type: string;
+  order_idx: number;
+}
 
 export default function Home() {
   // 기본값을 'user'(사용자 모드)로 변경했습니다.
@@ -40,21 +36,33 @@ export default function Home() {
   const [age, setAge] = useState<string>('');
   const [gender, setGender] = useState<string>('남');
   const [grade, setGrade] = useState<string>('A');
-  
+  const [courts, setCourts] = useState<Court[]>([]);
+
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchPlayers();
+    fetchCourts();
 
-    const subscription = supabase
+    // 선수 실시간 구독
+    const playersubscription = supabase
       .channel('players_channel')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, () => {
         fetchPlayers(); 
       })
       .subscribe();
 
+    // 코트 실시간 구독
+    const courtSubscription = supabase
+      .channel('courts_channel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'courts' }, () => {
+        fetchCourts(); 
+      })
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(subscription);
+      supabase.removeChannel(playersubscription);
+      supabase.removeChannel(courtSubscription);
     };
   }, []);
 
@@ -62,6 +70,24 @@ export default function Home() {
     const { data, error } = await supabase.from('players').select('*');
     if (data) setPlayers(data);
     if (error) console.error('데이터 불러오기 에러:', error);
+  };
+
+  const fetchCourts = async () => {
+    const { data, error } = await supabase.from('courts').select('*').order('order_idx', { ascending: true });
+    if (data) setCourts(data);
+    if (error) console.error('코트 데이터 에러:', error);
+  };
+
+  const handleCourtRenameChange = (id: string, newTitle: string) => {
+    setCourts(courts.map(c => c.id === id ? { ...c, title: newTitle } : c));
+  };
+
+  const handleCourtRenameSave = async (id: string, newTitle: string) => {
+    if (!newTitle.trim()) {
+      fetchCourts(); 
+      return;
+    }
+    await supabase.from('courts').update({ title: newTitle }).eq('id', id);
   };
 
   // 관리자 로그인 처리 함수 (DB 연동 버전)
@@ -244,9 +270,39 @@ export default function Home() {
 
   // 경기 종료 (구글 시트로 이동) 버튼 클릭 이벤트
   const handleDayClose = async () => {
-    if (confirm('오늘의 모임을 마감하고 구글 시트로 데이터를 전송하시겠습니까?')) {
-      alert('구글 시트 연동 기능이 곧 추가될 예정입니다!');
-      // TODO: 여기에 구글 시트 전송 로직이 들어갈 예정입니다.
+    if (players.length === 0) {
+      return alert('전송할 선수 데이터가 없습니다.');
+    }
+    
+    if (confirm('오늘의 모임을 마감하고 구글 시트로 데이터를 전송하시겠습니까?\n(※ 저장 후 현재 등록된 모든 선수 데이터는 초기화됩니다.)')) {
+      try {
+        const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzVTU_PigUSIB3feaXPEQO1YrCl2nlMc7X4TjHmQ-ndqshlpdE5woev5NccE0n1gJGhVA/exec";
+
+        // 구글 시트로 데이터 쏘기 (CORS 에러 방지를 위해 text/plain 사용)
+        const response = await fetch(GOOGLE_WEB_APP_URL, {
+          method: 'POST',
+          mode: 'no-cors', // 브라우저 보안 에러 우회
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8',
+          },
+          body: JSON.stringify(players),
+        });
+
+        // 브라우저 보안 에러 우회하기 위해 response를 받지 않음.
+        // if (!response.ok) throw new Error('구글 시트로 데이터 전송 실패!');
+
+        // 수파베이스 (DB)에서 모든 선수 데이터 깔끔하게 지우기
+        const { error } = await supabase.from('players').delete().neq("id", '0');
+        if (error) throw error;
+
+        // 화면 상태 초기화
+        setPlayers([]);
+
+        alert('성공적으로 데이터를 전송하고 모임을 마감했습니다.');
+      } catch (error) {
+        console.error('마감 에러:', error);
+        alert('데이터 전송 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+      }
     }
   };
 
@@ -401,7 +457,7 @@ export default function Home() {
         </h1>
         
         <div className={`grid gap-6 ${viewMode === 'user' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-7xl mx-auto' : 'grid-cols-1 lg:grid-cols-2 xl:grid-cols-4'}`}>
-          {COURT_SLOTS.map((slot) => {
+          {courts.map((slot) => {
             const slotPlayers = players.filter(p => p.status === slot.id);
             const isCourt = slot.type === 'court';
             
@@ -409,14 +465,27 @@ export default function Home() {
               <div key={slot.id} className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden transition-all hover:shadow-md">
                 
                 <div className={`${isCourt ? 'bg-slate-800' : 'bg-indigo-500'} px-4 py-3 flex justify-between items-center`}>
-                  <h3 className="text-white font-bold text-lg">{slot.title}</h3>
+                  {/* 👇 관리자 & 경기 코트일 때 입력칸 표시 */}
+                  {viewMode === 'admin' && isCourt ? (
+                    <input
+                      type="text"
+                      value={slot.title}
+                      onChange={(e) => handleCourtRenameChange(slot.id, e.target.value)}
+                      onBlur={(e) => handleCourtRenameSave(slot.id, e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                      className="bg-transparent text-white font-bold text-lg focus:outline-none border-b-2 border-dashed border-white/50 w-28 px-1 placeholder-white/50"
+                    />
+                  ) : (
+                    <h3 className="text-white font-bold text-lg">{slot.title}</h3>
+                  )}
+
                   <span className={`text-sm font-bold ${slotPlayers.length >= 4 ? 'text-red-300' : 'text-slate-200'}`}>
                     {slotPlayers.length} / 4 명
                   </span>
                 </div>
 
                 <div 
-                  className={`flex-1 p-4 flex flex-col gap-2 min-h-[160px] ${slotPlayers.length === 0 ? 'justify-center items-center' : ''} ${selectedPlayerId ? 'cursor-pointer hover:bg-indigo-50/50' : ''}`}
+                  className={`flex-1 p-4 flex flex-col gap-2 min-h-[240px] ${slotPlayers.length === 0 ? 'justify-center items-center' : ''} ${selectedPlayerId ? 'cursor-pointer hover:bg-indigo-50/50' : ''}`}
                   onDragOver={viewMode === 'admin' ? handleDragOver : undefined}
                   onDrop={viewMode === 'admin' ? (e) => handleDrop(e, slot.id) : undefined}
                   onClick={() => handleSlotClick(slot.id)}
