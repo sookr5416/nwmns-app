@@ -71,6 +71,8 @@ export default function UserHomePage() {
 
     if (data && data.length > 0) {
       // 로그인 성공
+      sessionStorage.setItem('isAdmin', 'true');
+      
       setShowLoginModal(false);
       setAdminId('');
       setAdminPw('');

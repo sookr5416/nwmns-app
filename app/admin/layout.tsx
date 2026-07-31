@@ -1,11 +1,25 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { ReactNode } from 'react';
+import { usePathname, useRouter } from 'next/navigation'; // 🌟 useRouter 추가
+import { ReactNode, useEffect, useState } from 'react';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [isAuthorized, setIsAuthorized] = useState(false); // 🌟 인증 여부 상태
+
+  // 🌟 방문증(세션) 검사 로직
+  useEffect(() => {
+    const isAdmin = sessionStorage.getItem('isAdmin');
+    
+    if (!isAdmin) {
+      alert('관리자 로그인이 필요한 페이지입니다.');
+      router.push('/'); // 방문증이 없으면 메인 화면으로 튕겨냄
+    } else {
+      setIsAuthorized(true); // 방문증이 있으면 화면을 보여주도록 허가
+    }
+  }, [router]);
 
   const menuItems = [
     { name: '코트 및 대기 배정', href: '/admin/courts' },
@@ -14,10 +28,14 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     { name: '회원별 출석 관리', href: '/admin/member-attendance' },
   ];
 
+  // 🌟 인증을 확인하는 동안에는 빈 화면(또는 로딩)을 띄워 깜빡임 방지
+  if (!isAuthorized) {
+    return <div className="h-screen w-screen bg-slate-50 flex items-center justify-center">인증 확인 중...</div>;
+  }
+
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden">
       
-      {/* 좌측 메뉴 영역: 모바일에서는 아예 안 뜨고(hidden), PC(md 이상)에서만 flex로 나타납니다 */}
       <aside className="hidden md:flex w-64 bg-slate-900 text-white flex-col flex-shrink-0 shadow-xl z-30">
         <div className="p-6 border-b border-slate-800">
           <h1 className="text-xl font-extrabold tracking-tight text-indigo-400">클럽 관리 시스템</h1>
@@ -42,9 +60,21 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
+        
+        {/* 🌟 선택사항: 로그아웃 버튼 추가 */}
+        <div className="p-4 border-t border-slate-800">
+          <button 
+            onClick={() => {
+              sessionStorage.removeItem('isAdmin'); // 방문증 파기
+              router.push('/');
+            }}
+            className="w-full py-2 bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg text-sm font-bold transition-colors"
+          >
+            로그아웃
+          </button>
+        </div>
       </aside>
 
-      {/* 🌟 우측 메인 콘텐츠 영역: 모바일에서는 전체 화면을 가득 채웁니다 */}
       <main className="flex-1 flex flex-col h-full overflow-y-auto bg-slate-50 relative">
         {children}
       </main>
@@ -52,15 +82,3 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     </div>
   );
 }
-
-
-
-/*
-
-1. 코트 및 대기 배정
-2. 회원 명단
-3. 정모 정보 게시판 (어디서 몇 시, 게스트 몇 명, 정원 몇 명)
-4. 전체 출석 게시판
-
-
-*/
