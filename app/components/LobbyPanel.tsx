@@ -24,21 +24,21 @@ interface LobbyPanelProps {
   handleDragOver: (e: DragEvent<HTMLDivElement>) => void;
   handleDrop: (e: DragEvent<HTMLDivElement>, targetSlotId: string) => void;
   handleSlotClick: (targetSlotId: string) => void;
+  onOpenMemberPopup?: () => void;
 }
 
 export default function LobbyPanel({
   isRegOpen, setIsRegOpen, name, setName, age, setAge, gender, setGender, grade, setGrade,
   nameInputRef, handleRegister, players, selectedPlayerId, handleDragStart, handlePlayerClick,
-  handleDelete, handleDragOver, handleDrop, handleSlotClick,
+  handleDelete, handleDragOver, handleDrop, handleSlotClick, onOpenMemberPopup,
 }: LobbyPanelProps) {
   return (
     <div className="order-2 md:order-1 w-full md:w-80 h-[45vh] md:h-full flex-shrink-0 bg-white border-t md:border-t-0 md:border-r border-slate-200 flex flex-col shadow-[0_-5px_15px_rgba(0,0,0,0.05)] md:shadow-xl z-20">
       
-      {/* 🌟 당일 출석/대기 등록 폼 */}
+      {/* 당일 출석/대기 등록 폼 */}
       <div className="p-4 md:p-6 border-b border-slate-100">
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-bold text-slate-800">게스트 현장 등록</h2>
-          {/* 🌟 토글 버튼 (onClick 시 부모의 setIsRegOpen 실행) */}
           <button 
             type="button" 
             onClick={() => setIsRegOpen(!isRegOpen)} 
@@ -69,14 +69,28 @@ export default function LobbyPanel({
         )}
       </div>
 
-      {/* 🌟 로비(대기석) 리스트 */}
+      {/* 로비(대기석) 리스트 */}
       <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'lobby')} onClick={() => handleSlotClick('lobby')}>
-        <h3 className="text-sm font-bold text-slate-500 mb-3 flex justify-between items-center">
-          전체 대기 선수 (로비) 
-          <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs">
-            {players.filter(p => p.status === 'lobby').length} / {players.length}명
-          </span>
-        </h3>
+        
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-bold text-slate-600">전체 대기 선수 (로비)</h3>
+          
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={(e) => { 
+                e.stopPropagation(); // 부모의 onClick 방지
+                if(onOpenMemberPopup) onOpenMemberPopup(); 
+              }}
+              className="bg-indigo-600 text-white hover:bg-indigo-700 w-6 h-6 rounded-md flex items-center justify-center text-sm font-bold transition-colors shadow-sm cursor-pointer"
+              title="회원 불러오기"
+            >
+              +
+            </button>
+            <span className="bg-slate-200 text-slate-600 px-2.5 py-1 rounded-full text-xs font-bold">
+              {players.filter(p => p.status === 'lobby').length} / {players.length}명
+            </span>
+          </div>
+        </div>
         
         <ul className="space-y-2 min-h-[200px]">
           {players.filter(p => p.status === 'lobby').sort((a, b) => a.count - b.count).map((player) => (

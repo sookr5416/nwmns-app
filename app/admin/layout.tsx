@@ -17,7 +17,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden">
       
-      {/* 🌟 좌측 메뉴 영역: 모바일에서는 아예 안 뜨고(hidden), PC(md 이상)에서만 flex로 나타납니다 */}
+      {/* 좌측 메뉴 영역: 모바일에서는 아예 안 뜨고(hidden), PC(md 이상)에서만 flex로 나타납니다 */}
       <aside className="hidden md:flex w-64 bg-slate-900 text-white flex-col flex-shrink-0 shadow-xl z-30">
         <div className="p-6 border-b border-slate-800">
           <h1 className="text-xl font-extrabold tracking-tight text-indigo-400">클럽 관리 시스템</h1>

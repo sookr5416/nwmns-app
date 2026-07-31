@@ -116,12 +116,6 @@ export default function MemberManagementPage() {
     if (selectedMemberIds.length === 0) {
       return showPopup('alert', '선택 오류', '코트 대기(로비) 명단에 추가할 회원을 체크박스로 선택해주세요.');
     }
-    
-    // 🌟 오늘 당일 정모 개설 여부 확인
-    const hasGathering = await checkTodayGatheringExists();
-    if (!hasGathering) {
-      return showPopup('alert', '출석 불가', '오늘 등록된 정모 일정이 없어 참석 처리할 수 없습니다.\n[정모 정보 및 일정 관리] 메뉴에서 오늘 일정을 먼저 등록해주세요.');
-    }
 
     const targets = members.filter(m => selectedMemberIds.includes(m.id));
 
@@ -186,7 +180,7 @@ export default function MemberManagementPage() {
   };
 
   const handleCheckIn = async (memberId: string, memberName: string) => {
-    // 🌟 오늘 당일 정모 개설 여부 확인
+    // 오늘 당일 정모 개설 여부 확인
     const hasGathering = await checkTodayGatheringExists();
     if (!hasGathering) {
       return showPopup('alert', '출석 불가', '오늘 등록된 정모 일정이 없어 출석 처리할 수 없습니다.\n[정모 정보 및 일정 관리] 메뉴에서 오늘 일정을 먼저 등록해주세요.');
