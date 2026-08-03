@@ -99,29 +99,70 @@ export default function GatheringManagementPage() {
 
   const handleDeleteGathering = (e: React.MouseEvent, id: string, dateStr: string) => {
     e.stopPropagation();
-    showPopup('confirm', '정모 삭제', `${formatDateString(dateStr)} 정모 일정을 정말 삭제하시겠습니까?`, async () => {
+    
+    // 🌟 삭제 경고창 메시지도 더 명확하게 수정했습니다.
+    showPopup('confirm', '정모 삭제', `${formatDateString(dateStr)} 정모 일정을 삭제하시겠습니까?\n(해당 일자의 정회원 및 게스트 출석 기록도 함께 모두 삭제됩니다.)`, async () => {
       closePopup();
+      
+      // 🌟 1. 해당 일자의 정회원 출석 기록 삭제
+      await supabase.from('attendances').delete().eq('attended_date', dateStr);
+      
+      // 🌟 2. 해당 일자의 게스트 출석 기록 삭제
+      await supabase.from('guest_attendances').delete().eq('attended_date', dateStr);
+
+      // 🌟 3. 마지막으로 정모 기록 삭제
       const { error } = await supabase.from('gatherings').delete().eq('id', id);
+      
       if (error) {
-        showPopup('alert', '오류', '삭제 중 오류가 발생했습니다.');
+        showPopup('alert', '오류', '정모 삭제 중 오류가 발생했습니다.');
       } else {
         setGatheringList(gatheringList.filter(g => g.id !== id));
         if (selectedGathering?.id === id) setSelectedGathering(null);
+        
+        // 삭제 성공 시 완료 팝업 띄우기 (선택 사항)
+        showPopup('alert', '삭제 완료', '정모 일정 및 관련 출석 기록이 성공적으로 삭제되었습니다.');
       }
     });
   };
 
+  // 🌟 정회원과 게스트를 모두 불러와서 합치도록 수정
   const handleSelectGathering = async (gathering: Gathering) => {
     setSelectedGathering(gathering);
-    const { data } = await supabase
+    let allAttendees: any[] = [];
+
+    // 1. 기존 정회원 출석 기록 조회
+    const { data: memberData } = await supabase
       .from('attendances')
       .select('members(id, name, age, gender, grade, role)')
-      .eq('attended_date', gathering.gathering_date);
+      .eq('gathering_id', gathering.id);
 
-    if (data) {
-      const attendees = data.map((item: any) => item.members).filter(Boolean);
-      setGatheringAttendees(attendees);
+    if (memberData) {
+      const regulars = memberData.map((item: any) => item.members).filter(Boolean);
+      allAttendees = [...allAttendees, ...regulars];
     }
+
+    // 2. 게스트 출석 기록 조회 (guest_attendances 테이블)
+    const { data: guestData } = await supabase
+      .from('guest_attendances')
+      .select('*')
+      .eq('gathering_id', gathering.id);
+
+    if (guestData) {
+      const guests = guestData.map(g => ({
+        id: g.id,
+        name: g.name,
+        age: g.age,
+        gender: g.gender,
+        grade: g.grade,
+        role: '게스트' // 게스트 식별용 가상 role 부여
+      }));
+      allAttendees = [...allAttendees, ...guests];
+    }
+
+    // 3. 이름 가나다 순으로 전체 정렬 (렌더링 시 정회원/게스트 분리 예정)
+    allAttendees.sort((a, b) => a.name.localeCompare(b.name));
+
+    setGatheringAttendees(allAttendees);
   };
 
   const formatDateString = (dateStr: string) => {
@@ -137,6 +178,10 @@ export default function GatheringManagementPage() {
     if (clean.length === 8) return `${clean.substring(2, 4)}.${clean.substring(4, 6)}.${clean.substring(6, 8)}`;
     return dobStr;
   };
+
+  // 🌟 정회원과 게스트 데이터를 분리
+  const regulars = gatheringAttendees.filter(m => m.role !== '게스트');
+  const guests = gatheringAttendees.filter(m => m.role === '게스트');
 
   return (
     <div className="p-6 w-full flex-1 overflow-y-auto">
@@ -267,12 +312,27 @@ export default function GatheringManagementPage() {
                 ✕
               </button>
             </div>
+            
             <div className="p-6 overflow-y-auto flex-1 divide-y divide-slate-100">
-              {gatheringAttendees.map((member: any, idx: number) => (
-                <div key={idx} className="py-3 flex justify-between items-center">
+              
+              {/* 🌟 1. 정회원 명단 렌더링 */}
+              {regulars.map((member: any, idx: number) => (
+                <div key={`regular-${idx}`} className="py-3 flex justify-between items-center px-1">
                   <div className="flex items-center gap-3">
                     <span className="w-6 text-xs font-bold text-slate-400">{idx + 1}</span>
-                    <span className="font-bold text-slate-800 text-base">{member.name}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-slate-800 text-base">{member.name}</span>
+                      {member.role === '모임장' && (
+                        <span className="bg-purple-100 text-purple-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded border border-purple-200">
+                          모임장
+                        </span>
+                      )}
+                      {member.role === '운영진' && (
+                        <span className="bg-blue-100 text-blue-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded border border-blue-200">
+                          운영진
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-slate-500">
                     <span className={`text-xs font-bold px-2 py-0.5 rounded ${member.gender === '남' ? 'text-blue-700 bg-blue-100' : 'text-yellow-800 bg-yellow-100'}`}>{member.gender}</span>
@@ -280,12 +340,35 @@ export default function GatheringManagementPage() {
                   </div>
                 </div>
               ))}
+
+              {/* 🌟 3. 게스트 명단 렌더링 (번호 이어짐) */}
+              {guests.map((member: any, idx: number) => (
+                <div key={`guest-${idx}`} className="py-3 flex justify-between items-center px-1">
+                  <div className="flex items-center gap-3">
+                    <span className="w-6 text-xs font-bold text-slate-400">{regulars.length + idx + 1}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-slate-800 text-base">{member.name}</span>
+                      <span className="bg-emerald-100 text-emerald-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded border border-emerald-200">
+                        게스트
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${member.gender === '남' ? 'text-blue-700 bg-blue-100' : 'text-yellow-800 bg-yellow-100'}`}>{member.gender}</span>
+                    <span className="font-bold text-slate-700">{member.grade}조</span>
+                  </div>
+                </div>
+              ))}
+
+              {/* 예외처리: 참석자가 아예 없을 경우 */}
               {gatheringAttendees.length === 0 && (
                 <div className="text-center py-10 text-slate-400 font-medium">
                   이 날짜에 출석 체크된 인원이 없습니다.
                 </div>
               )}
+
             </div>
+            
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 text-right">
               <button onClick={() => setSelectedGathering(null)} className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm">확인</button>
             </div>

@@ -94,7 +94,7 @@ export default function AdminCourtsPage() {
   // 🌟 DB 회원 명단 가져오기 및 정렬 로직 추가
   const fetchDbMembers = async () => {
     // role, created_at 컬럼 추가로 조회
-    const { data } = await supabase.from('members').select('id, name, age, gender, grade, role, created_at');
+    const { data } = await supabase.from('members').select('id, name, age, gender, grade, role, created_at, role');
     
     if (data) {
       const membersData = data as DbMember[];
@@ -181,14 +181,14 @@ export default function AdminCourtsPage() {
     const isExistingMember = dbMembers.some(m => m.name.trim() === name.trim() && m.gender === gender);
 
     const addNewPlayer = async () => {
-      const newPlayer: Player = { id: Date.now().toString(), name: name.trim(), age, gender, grade, count: 0, status: 'lobby' };
+      const newPlayer: Player = { id: Date.now().toString(), name: name.trim(), age, gender, grade, count: 0, status: 'lobby', role: 'guest'};
       setPlayers(prev => [...prev, newPlayer]);
       setName(''); setAge(''); nameInputRef.current?.focus();
       await supabase.from('players').insert([newPlayer]);
     };
 
     if (isExistingMember) {
-      showPopup('confirm', '회원 중복 확인', '기존 정회원 명단에 동일한 이름과 성별을 가진 회원이 있습니다. 정말로 새로운 게스트로 등록하시겠습니까?', () => {
+      showPopup('confirm', '회원 중복 확인', '기존 회원 명단에 동일한 이름과 성별을 가진 회원이 있습니다. 정말로 새로운 게스트로 등록하시겠습니까?', () => {
         closePopup();
         addNewPlayer();
       });
@@ -205,7 +205,8 @@ export default function AdminCourtsPage() {
       gender: member.gender, 
       grade: member.grade, 
       count: 0, 
-      status: 'lobby' 
+      status: 'lobby',
+      role: member.role
     };
     setPlayers(prev => [...prev, newPlayer]);
     await supabase.from('players').insert([newPlayer]);
@@ -326,17 +327,21 @@ export default function AdminCourtsPage() {
 
       showPopup('confirm', '정모 마감', `[${locationTitle} / ${timeTitle}] 정모 기록을 저장하고 참석 회원들을 출석 처리하시겠습니까?`, async () => {
         closePopup();
-        const { error: gatheringError } = await supabase.from('gatherings').insert([{
+        
+        // 🌟 1. 정모 기록을 저장하고, 방금 생성된 데이터(.select().single())를 가져옵니다.
+        const { data: newGathering, error: gatheringError } = await supabase.from('gatherings').insert([{
           gathering_date: todayDate,
           location: locationTitle,
           start_time: timeTitle,
           memo: memoTitle
-        }]);
+        }]).select().single(); // ⬅️ 이 부분이 핵심입니다!
 
-        if (gatheringError) {
+        if (gatheringError || !newGathering) {
           showPopup('alert', '오류', '정모 기록 저장 중 오류가 발생했습니다.');
           return;
         }
+
+        const currentGatheringId = newGathering.id; // 🌟 방금 생성된 정모의 ID 확보
 
         const { data: allMembers } = await supabase.from('members').select('id, name, age, gender');
         
@@ -344,7 +349,10 @@ export default function AdminCourtsPage() {
           const { data: existingAttendances } = await supabase.from('attendances').select('member_id').eq('attended_date', todayDate);
           const alreadyCheckedMemberIds = new Set(existingAttendances?.map(a => a.member_id) || []);
 
-          const attendanceInserts: { member_id: string; attended_date: string }[] = [];
+          // 🌟 attendances 테이블에 들어갈 데이터 타입에 gathering_id 추가
+          const attendanceInserts: { gathering_id: string; member_id: string; attended_date: string }[] = [];
+          
+          const guestAttendanceInserts: { name: string; age: string; gender: string; grade: string; gathering_id: string; attended_date: string }[] = [];
 
           players.forEach(p => {
             const matchedMember = allMembers.find(m => 
@@ -353,17 +361,33 @@ export default function AdminCourtsPage() {
               m.gender === p.gender
             );
 
-            if (matchedMember && !alreadyCheckedMemberIds.has(matchedMember.id)) {
-              attendanceInserts.push({
-                member_id: matchedMember.id,
+            if (matchedMember) {
+              if (!alreadyCheckedMemberIds.has(matchedMember.id)) {
+                attendanceInserts.push({
+                  gathering_id: currentGatheringId, // 🌟 여기서 gathering_id를 넣어줍니다!
+                  member_id: matchedMember.id,
+                  attended_date: todayDate
+                });
+                alreadyCheckedMemberIds.add(matchedMember.id);
+              }
+            } else {
+              guestAttendanceInserts.push({
+                name: p.name,
+                age: p.age,
+                gender: p.gender,
+                grade: p.grade,
+                gathering_id: currentGatheringId,
                 attended_date: todayDate
               });
-              alreadyCheckedMemberIds.add(matchedMember.id);
             }
           });
 
           if (attendanceInserts.length > 0) {
             await supabase.from('attendances').insert(attendanceInserts);
+          }
+          
+          if (guestAttendanceInserts.length > 0) {
+            await supabase.from('guest_attendances').insert(guestAttendanceInserts);
           }
         }
 
@@ -457,7 +481,7 @@ export default function AdminCourtsPage() {
               {dbMembers
                 .filter(m => m.name.includes(memberSearchTerm))
                 .map(member => {
-                  const isAdded = players.some(p => p.name === member.name && p.gender === member.gender);
+                  const isAdded = players.some(p => p.name === member.name && p.gender === member.gender && p.role === member.role);
                   return (
                     <div key={member.id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition-colors border-b border-slate-50 last:border-0">
                       <div>

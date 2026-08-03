@@ -102,6 +102,11 @@ export default function LobbyPanel({
                 <div>
                   <span className="font-bold text-slate-700">{player.name}</span>
                   <span className="ml-2 text-xs text-slate-500">{player.grade}조 · {player.count}게임</span>
+                  {player.role === 'guest' && (
+                  <span className="ml-2 bg-emerald-100 text-emerald-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded border border-emerald-200 whitespace-nowrap">
+                    게스트
+                  </span>
+                )}
                 </div>
               </div>
               <button onClick={(e) => { e.stopPropagation(); handleDelete(player.id); }} className="w-7 h-7 flex items-center justify-center rounded bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors">✕</button>

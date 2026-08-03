@@ -6,6 +6,7 @@ export interface Player {
   grade: string;
   count: number;
   status: string;
+  role?: string;
 }
 
 export interface Court {
