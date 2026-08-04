@@ -23,12 +23,14 @@ interface CourtSectionProps {
   isFinishingRef?: React.MutableRefObject<Record<string, boolean>>;
   handleDayClose?: () => void;
   onDeleteCourt?: (courtId: string) => void;
+  pairCounts?: Record<string, Record<string, number>>;
 }
 
 export default function CourtSection({
   viewMode, courts, players, selectedPlayerId, processingCourtId, formatTime,
   handleCourtRenameChange, handleCourtRenameSave, handleDragOver, handleDrop, handleSlotClick,
-  handleDragStart, handlePlayerClick, resetSlot, finishGame, startGame, isFinishingRef, handleDayClose, onDeleteCourt
+  handleDragStart, handlePlayerClick, resetSlot, finishGame, startGame, isFinishingRef,
+  handleDayClose, onDeleteCourt, pairCounts 
 }: CourtSectionProps) {
   return (
     <div className="order-1 md:order-2 flex-1 flex flex-col h-full overflow-y-auto p-4 md:p-8 bg-slate-50 relative">
@@ -86,7 +88,7 @@ export default function CourtSection({
                       {isLesson ? `${slotPlayers.length}명` : `${slotPlayers.length}/4명`}
                     </span>
 
-                    {/* 🌟 컴팩트하고 세련된 삭제 버튼 */}
+                    {/* 컴팩트하고 세련된 삭제 버튼 */}
                     {viewMode === 'admin' && isGameCourt && onDeleteCourt && (
                       <button
                         onClick={() => onDeleteCourt(slot.id)}
@@ -110,24 +112,46 @@ export default function CourtSection({
                       {viewMode === 'admin' ? '선수를 드래그하세요' : '비어 있음'}
                     </div>
                   ) : (
-                    slotPlayers.map(p => (
-                      <div 
-                        key={p.id} 
-                        draggable={viewMode === 'admin' && !slot.start_time}
-                        onDragStart={viewMode === 'admin' && handleDragStart ? (e) => handleDragStart(e, p.id) : undefined}
-                        onClick={handlePlayerClick ? (e) => handlePlayerClick(p.id, e) : undefined}
-                        className={`border px-3 py-2 rounded-md flex justify-between items-center transition-all ${
-                          viewMode === 'admin' && !slot.start_time ? 'cursor-pointer hover:-translate-y-0.5' : 'cursor-default opacity-80'
-                        } ${
-                          p.gender === '남' ? 'bg-blue-50 border-blue-200 hover:border-blue-300' : 'bg-yellow-50 border-yellow-200 hover:border-yellow-300' 
-                        } ${selectedPlayerId === p.id ? 'ring-4 ring-indigo-500 scale-105 shadow-md' : ''}`}
-                      >
-                        <span className="font-bold text-slate-800">{p.name}</span>
-                        <span className={`text-xs font-bold px-2 py-1 rounded ${p.gender === '남' ? 'text-blue-700 bg-blue-200' : 'text-yellow-800 bg-yellow-200'}`}>
-                          {p.grade}조
-                        </span>
-                      </div>
-                    ))
+                    slotPlayers.map(p => {
+                      
+                      // 같은 코트에 배정된 다른 선수들 중, 과거에 같이 뛴 기록이 있을 경우, 경고 표시 (양방향 체크) ===> 2판 이상
+                      const hasDuplicatePair = slotPlayers.some(other => {
+                        if (other.id === p.id) return false;
+
+                        const countA = pairCounts?.[p.id]?.[other.id] || 0;
+                        const countB = pairCounts?.[other.id]?.[p.id] || 0;
+                        
+                        return countA > 2 && countB > 2;
+                      });
+
+                      return (
+                        <div 
+                          key={p.id} 
+                          draggable={viewMode === 'admin' && !slot.start_time}
+                          onDragStart={viewMode === 'admin' && handleDragStart ? (e) => handleDragStart(e, p.id) : undefined}
+                          onClick={handlePlayerClick ? (e) => handlePlayerClick(p.id, e) : undefined}
+                          className={`border px-3 py-2 rounded-md flex justify-between items-center transition-all ${
+                            viewMode === 'admin' && !slot.start_time ? 'cursor-pointer hover:-translate-y-0.5' : 'cursor-default opacity-80'
+                          } ${
+                            p.gender === '남' ? 'bg-blue-50 border-blue-200 hover:border-blue-300' : 'bg-yellow-50 border-yellow-200 hover:border-yellow-300' 
+                          } ${selectedPlayerId === p.id ? 'ring-4 ring-indigo-500 scale-105 shadow-md' : ''}`}
+                        >
+                          <span className="font-bold text-slate-800">{p.name}</span>
+
+                          <div className="flex items-center gap-1.5">
+                            {hasDuplicatePair && (
+                              <span className="text-red-500 text-xs font-bold ml-2">
+                                ⚠️ 중복
+                              </span>
+                            )}
+
+                            <span className={`text-xs font-bold px-2 py-1 rounded ${p.gender === '남' ? 'text-blue-700 bg-blue-200' : 'text-yellow-800 bg-yellow-200'}`}>
+                              {p.grade}조
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
 

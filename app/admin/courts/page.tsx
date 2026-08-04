@@ -42,6 +42,7 @@ export default function AdminCourtsPage() {
   const [processingCourtId, setProcessingCourtId] = useState<string | null>(null);
   const isFinishingRef = useRef<Record<string, boolean>>({});
 
+  const [pairCounts, setPairCounts] = useState<Record<string, Record<string, number>>>({});
   const [popup, setPopup] = useState<PopupState>({
     isOpen: false,
     type: 'alert',
@@ -76,6 +77,7 @@ export default function AdminCourtsPage() {
 
   const fetchPlayers = async () => {
     const { data } = await supabase.from('players').select('*');
+    
     if (data) setPlayers(data);
   };
 
@@ -127,6 +129,7 @@ export default function AdminCourtsPage() {
     const diff = Math.floor((now - startTime) / 1000);
     const m = String(Math.floor(diff / 60)).padStart(2, '0');
     const s = String(diff % 60).padStart(2, '0');
+    
     return `${m}:${s}`;
   };
 
@@ -138,6 +141,7 @@ export default function AdminCourtsPage() {
 
   const handleAddGameCourt = async () => {
     const gameCourts = courts.filter(c => c.type === 'game');
+    
     if (gameCourts.length >= 8) {
       return showPopup('alert', '알림', '게임 코트는 최대 8개까지만 추가할 수 있습니다.');
     }
@@ -146,22 +150,25 @@ export default function AdminCourtsPage() {
     const newCourtId = `court-${Date.now()}`;
     const newCourtTitle = `${newIndex}번 코트`;
     const maxOrder = Math.max(...courts.map(c => c.order_idx || 0), 0);
-
     const newCourt: Court = { id: newCourtId, title: newCourtTitle, type: 'game', order_idx: maxOrder + 1, start_time: null };
+
     setCourts([...courts, newCourt]);
     await supabase.from('courts').insert([newCourt]);
   };
 
   const handleDeleteGameCourt = async (courtId: string) => {
     const gameCourts = courts.filter(c => c.type === 'game');
+    
     if (gameCourts.length <= 2) {
       return showPopup('alert', '알림', '게임 코트는 최소 2개 이상 유지되어야 합니다.');
     }
     const targetCourt = courts.find(c => c.id === courtId);
+    
     if (targetCourt?.start_time) {
       return showPopup('alert', '알림', '현재 경기가 진행 중인 코트는 삭제할 수 없습니다.');
     }
     const playersInCourt = players.filter(p => p.status === courtId);
+    
     if (playersInCourt.length > 0) {
       return showPopup('alert', '알림', `해당 코트에 선수가 ${playersInCourt.length}명 등록되어 있어 삭제할 수 없습니다. 선수를 먼저 비워주세요.`);
     }
@@ -285,13 +292,34 @@ export default function AdminCourtsPage() {
 
   const finishGame = async (slotId: string) => {
     if (isFinishingRef.current[slotId]) return;
+
     const court = courts.find(c => c.id === slotId);
+
     if (!court?.start_time || players.filter(p => p.status === slotId).length !== 4) return;
+    
     isFinishingRef.current[slotId] = true;
     setProcessingCourtId(slotId);
+
     try {
       await supabase.from('courts').update({ start_time: null }).eq('id', slotId);
 
+      // 같이 뛴 선수 기록 (pairCounts update)
+      const courtPlayers = players.filter(p => p.status === slotId);
+
+      setPairCounts(prev => {
+        const next = { ...prev };
+        courtPlayers.forEach(p1 => {
+          if (!next[p1.id]) next[p1.id] = {};
+          courtPlayers.forEach(p2 => {
+            if (p1.id !== p2.id) {
+              next[p1.id][p2.id] = (next[p1.id][p2.id] || 0) + 1;
+            }
+          });
+        });
+        return next;
+      });
+
+      // 경기 종료 시점 기록
       const currentTime = Date.now();
 
       const updatedPlayers = players.map(p => {
@@ -302,8 +330,11 @@ export default function AdminCourtsPage() {
         if (p.status === 'wait-4') return { ...p, status: 'wait-3'};
         return p;
       });
+
       setPlayers(updatedPlayers);
+
       const changed = updatedPlayers.filter((p, i) => p.status !== players[i].status || p.count !== players[i].count);
+
       if (changed.length > 0) await supabase.from('players').upsert(changed);
     } finally {
       setTimeout(() => { isFinishingRef.current[slotId] = false; setProcessingCourtId(null); }, 1000);
@@ -330,7 +361,6 @@ export default function AdminCourtsPage() {
       showPopup('confirm', '정모 마감', `[${locationTitle} / ${timeTitle}] 정모 기록을 저장하고 참석 회원들을 출석 처리하시겠습니까?`, async () => {
         closePopup();
         
-        // 🌟 1. 정모 기록을 저장하고, 방금 생성된 데이터(.select().single())를 가져옵니다.
         const { data: newGathering, error: gatheringError } = await supabase.from('gatherings').insert([{
           gathering_date: todayDate,
           location: locationTitle,
@@ -350,10 +380,7 @@ export default function AdminCourtsPage() {
         if (allMembers && allMembers.length > 0) {
           const { data: existingAttendances } = await supabase.from('attendances').select('member_id').eq('attended_date', todayDate);
           const alreadyCheckedMemberIds = new Set(existingAttendances?.map(a => a.member_id) || []);
-
-          // 🌟 attendances 테이블에 들어갈 데이터 타입에 gathering_id 추가
           const attendanceInserts: { gathering_id: string; member_id: string; attended_date: string }[] = [];
-          
           const guestAttendanceInserts: { name: string; age: string; gender: string; grade: string; gathering_id: string; attended_date: string }[] = [];
 
           players.forEach(p => {
@@ -454,6 +481,7 @@ export default function AdminCourtsPage() {
           resetSlot={resetSlot} finishGame={finishGame} startGame={startGame}
           isFinishingRef={isFinishingRef} handleDayClose={handleDayClose}
           onDeleteCourt={handleDeleteGameCourt}
+          pairCounts={pairCounts}
         />
       </div>
 
@@ -488,7 +516,6 @@ export default function AdminCourtsPage() {
                   return (
                     <div key={member.id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition-colors border-b border-slate-50 last:border-0">
                       <div>
-                        {/* 🌟 팝업 이름 옆에 직책(role) 뱃지 렌더링 */}
                         <div className="font-bold text-slate-800 flex items-center gap-1.5">
                           {member.name}
                           {member.role === '모임장' && (

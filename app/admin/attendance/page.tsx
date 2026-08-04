@@ -145,8 +145,8 @@ export default function GatheringManagementPage() {
     showPopup('confirm', '정모 삭제', `${formatDateString(dateStr)} 정모 일정을 삭제하시겠습니까?\n(해당 일자의 정회원 및 게스트 출석 기록도 함께 모두 삭제됩니다.)`, async () => {
       closePopup();
       
-      await supabase.from('attendances').delete().eq('attended_date', dateStr);
-      await supabase.from('guest_attendances').delete().eq('attended_date', dateStr);
+      await supabase.from('attendances').delete().eq('gathering_id', dateStr);
+      await supabase.from('guest_attendances').delete().eq('gathering_id', dateStr);
       const { error } = await supabase.from('gatherings').delete().eq('id', id);
       
       if (error) {
