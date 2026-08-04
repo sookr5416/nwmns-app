@@ -52,7 +52,7 @@ export default function CourtSection({
       <div className={`grid gap-6 ${viewMode === 'user' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-7xl mx-auto w-full' : 'grid-cols-1 lg:grid-cols-2 xl:grid-cols-4'}`}>
         {[...courts]
           .sort((a, b) => {
-            const orderWeight: Record<string, number> = { game: 1, wait: 2, lesson: 3 };
+            const orderWeight: Record<string, number> = { game: 1, wait: 2, lesson: 3, end: 4 };
             return (orderWeight[a.type] || 99) - (orderWeight[b.type] || 99) || (a.order_idx - b.order_idx);
           })
           .map((slot) => {
@@ -61,11 +61,12 @@ export default function CourtSection({
             const slotPlayers = players.filter(p => p.status === slot.id);
             const isGameCourt = slot.type === 'game';
             const isLesson = slot.type === 'lesson';
+            const isEnd = slot.type === 'end';
             
             return (
               <div key={slot.id} className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden transition-all hover:shadow-md">
-                {/* 🌟 상단 헤더: 공간을 효율적으로 배분하여 줄바꿈 방지 */}
-                <div className={`${isGameCourt ? 'bg-slate-800' : isLesson ? 'bg-emerald-600' : 'bg-indigo-500'} px-3.5 py-2.5 flex items-center justify-between gap-2`}>
+                {/* 상단 헤더: 공간을 효율적으로 배분하여 줄바꿈 방지 */}
+                <div className={`${isGameCourt ? 'bg-slate-800' : isLesson ? 'bg-emerald-600' : isEnd ? 'bg-red-500' : 'bg-indigo-500'} px-3.5 py-2.5 flex items-center justify-between gap-2`}>
                   <div className="flex items-center gap-1.5 min-w-0 flex-1">
                     {viewMode === 'admin' && isGameCourt && handleCourtRenameChange && handleCourtRenameSave ? (
                       <input

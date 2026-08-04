@@ -7,6 +7,7 @@ export interface Player {
   count: number;
   status: string;
   role?: string;
+  last_game_end_time?: number;
 }
 
 export interface Court {

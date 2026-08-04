@@ -25,13 +25,27 @@ interface LobbyPanelProps {
   handleDrop: (e: DragEvent<HTMLDivElement>, targetSlotId: string) => void;
   handleSlotClick: (targetSlotId: string) => void;
   onOpenMemberPopup?: () => void;
+  // 🌟 부모 컴포넌트(AdminCourtsPage)에서 1초마다 갱신되는 현재 시간을 받아옴
+  now?: number; 
 }
 
 export default function LobbyPanel({
   isRegOpen, setIsRegOpen, name, setName, age, setAge, gender, setGender, grade, setGrade,
   nameInputRef, handleRegister, players, selectedPlayerId, handleDragStart, handlePlayerClick,
-  handleDelete, handleDragOver, handleDrop, handleSlotClick, onOpenMemberPopup,
+  handleDelete, handleDragOver, handleDrop, handleSlotClick, onOpenMemberPopup, now = Date.now(),
 }: LobbyPanelProps) {
+
+  // 🌟 휴식 시간 계산 함수
+  const getRestTime = (lastEndTime?: number) => {
+    if (!lastEndTime) return null; // 한 번도 게임을 안 한 경우
+    
+    const diffMs = now - lastEndTime;
+    const diffMin = Math.floor(diffMs / 60000);
+    
+    if (diffMin < 1) return '방금전';
+    return `${diffMin}분전`;
+  };
+
   return (
     <div className="order-2 md:order-1 w-full md:w-80 h-[45vh] md:h-full flex-shrink-0 bg-white border-t md:border-t-0 md:border-r border-slate-200 flex flex-col shadow-[0_-5px_15px_rgba(0,0,0,0.05)] md:shadow-xl z-20">
       
@@ -78,7 +92,7 @@ export default function LobbyPanel({
           <div className="flex items-center gap-2">
             <button 
               onClick={(e) => { 
-                e.stopPropagation(); // 부모의 onClick 방지
+                e.stopPropagation();
                 if(onOpenMemberPopup) onOpenMemberPopup(); 
               }}
               className="bg-indigo-600 text-white hover:bg-indigo-700 w-6 h-6 rounded-md flex items-center justify-center text-sm font-bold transition-colors shadow-sm cursor-pointer"
@@ -93,25 +107,42 @@ export default function LobbyPanel({
         </div>
         
         <ul className="space-y-2 min-h-[200px]">
-          {players.filter(p => p.status === 'lobby').sort((a, b) => a.count - b.count).map((player) => (
-            <li key={player.id} draggable onDragStart={(e) => handleDragStart(e, player.id)} onClick={(e) => handlePlayerClick(player.id, e)} className={`flex items-center justify-between border p-3 rounded-lg shadow-sm transition-all group cursor-pointer ${player.gender === '남' ? 'bg-blue-50 border-blue-200 hover:border-blue-400' : 'bg-yellow-50 border-yellow-200 hover:border-yellow-400'} ${selectedPlayerId === player.id ? 'ring-4 ring-indigo-500 scale-[1.02]' : ''}`}>
-              <div className="flex items-center gap-3">
-                <div className="text-slate-300 group-hover:text-indigo-400">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z"></path></svg>
+          {players.filter(p => p.status === 'lobby').sort((a, b) => a.count - b.count).map((player) => {
+            // 해당 선수의 휴식 시간 계산
+            const restTime = getRestTime(player.last_game_end_time);
+
+            return (
+              <li key={player.id} draggable onDragStart={(e) => handleDragStart(e, player.id)} onClick={(e) => handlePlayerClick(player.id, e)} className={`flex items-center justify-between border p-3 rounded-lg shadow-sm transition-all group cursor-pointer ${player.gender === '남' ? 'bg-blue-50 border-blue-200 hover:border-blue-400' : 'bg-yellow-50 border-yellow-200 hover:border-yellow-400'} ${selectedPlayerId === player.id ? 'ring-4 ring-indigo-500 scale-[1.02]' : ''}`}>
+                
+                {/* 왼쪽 영역: 선수 정보 */}
+                <div className="flex items-center gap-3">
+                  <div>
+                    <span className="font-bold text-slate-700">{player.name}</span>
+                    <span className="ml-2 text-xs text-slate-500">{player.grade}조 · {player.count}게임</span>
+                    
+                    {player.role === 'guest' && (
+                      <span className="ml-2 bg-emerald-100 text-emerald-700 text-[11px] font-extrabold px-1.5 py-0.5 rounded border border-emerald-200 whitespace-nowrap">
+                        G
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <span className="font-bold text-slate-700">{player.name}</span>
-                  <span className="ml-2 text-xs text-slate-500">{player.grade}조 · {player.count}게임</span>
-                  {player.role === 'guest' && (
-                  <span className="ml-2 bg-emerald-100 text-emerald-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded border border-emerald-200 whitespace-nowrap">
-                    게스트
-                  </span>
-                )}
+
+                {/* 오른쪽 영역: 휴식 시간 + 삭제 버튼 */}
+                <div className="flex items-center gap-2.5">
+                  {restTime && (
+                    <span className="text-xs font-bold text-orange-500 whitespace-nowrap">
+                      ⏱ { restTime }
+                    </span>
+                  )}
+                  <button onClick={(e) => { e.stopPropagation(); handleDelete(player.id); }} className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors">
+                    ✕
+                  </button>
                 </div>
-              </div>
-              <button onClick={(e) => { e.stopPropagation(); handleDelete(player.id); }} className="w-7 h-7 flex items-center justify-center rounded bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors">✕</button>
-            </li>
-          ))}
+
+              </li>
+            );
+          })}
           {players.filter(p => p.status === 'lobby').length === 0 && (
             <div className="text-center py-8 text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-lg pointer-events-none">
               등록된 선수가 없거나 모두 코트에 있습니다.

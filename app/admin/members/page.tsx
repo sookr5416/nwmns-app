@@ -245,6 +245,15 @@ export default function MemberManagementPage() {
     }
   };
 
+  const handleUpdateGrade = async (id: string, newGrade: string) => {
+    const { error } = await supabase.from('members').update({ grade: newGrade }).eq('id', id);
+    if (error) {
+      showPopup('alert', '오류', '급수 수정 중 오류가 발생했습니다.');
+    } else {
+      setMembers(members.map(m => m.id === id ? { ...m, grade: newGrade } : m));
+    }
+  };
+
   const filteredMembers = members.filter(member => member.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   const sortedMembers = [...filteredMembers].sort((a, b) => {
@@ -449,7 +458,17 @@ export default function MemberManagementPage() {
                       {member.gender}
                     </span>
                   </td>
-                  <td className="px-4 py-4 font-bold text-slate-700">{member.grade}조</td>
+                  <td className="px-4 py-4">
+                    <select 
+                      value={member.grade} 
+                      onChange={(e) => handleUpdateGrade(member.id, e.target.value)}
+                      className="bg-transparent font-bold text-slate-700 text-lg focus:outline-none cursor-pointer py-1 appearance-none min-w-[3.5rem] text-center"
+                    >
+                      {['A', 'B', 'C', 'D', 'E', 'F'].map(lvl => (
+                        <option key={lvl} value={lvl}>{lvl}조</option>
+                      ))}
+                    </select>
+                  </td>
                   <td className="px-6 py-4 text-slate-600 font-medium text-sm">{joinDate}</td>
                   <td className="px-6 py-4 text-slate-600 font-medium text-sm">{lastAttendance}</td>
                   <td className="px-6 py-4 text-center">

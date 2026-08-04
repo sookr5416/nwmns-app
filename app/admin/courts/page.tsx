@@ -7,7 +7,6 @@ import LobbyPanel from '../../components/LobbyPanel';
 import CourtSection from '../../components/CourtSection';
 import CustomPopup, { PopupState } from '../../components/CustomPopup';
 
-// 🌟 DB 회원 타입에 role, created_at 추가
 interface DbMember {
   id: string;
   name: string;
@@ -91,7 +90,7 @@ export default function AdminCourtsPage() {
     }
   };
 
-  // 🌟 DB 회원 명단 가져오기 및 정렬 로직 추가
+  // DB 회원 명단 가져오기 및 정렬 로직 추가
   const fetchDbMembers = async () => {
     // role, created_at 컬럼 추가로 조회
     const { data } = await supabase.from('members').select('id, name, age, gender, grade, role, created_at, role');
@@ -292,8 +291,11 @@ export default function AdminCourtsPage() {
     setProcessingCourtId(slotId);
     try {
       await supabase.from('courts').update({ start_time: null }).eq('id', slotId);
+
+      const currentTime = Date.now();
+
       const updatedPlayers = players.map(p => {
-        if (p.status === slotId) return { ...p, status: 'lobby', count: p.count + 1 };
+        if (p.status === slotId) return { ...p, status: 'lobby', count: p.count + 1, last_game_end_time: currentTime };
         if (p.status === 'wait-1') return { ...p, status: slotId };
         if (p.status === 'wait-2') return { ...p, status: 'wait-1'};
         if (p.status === 'wait-3') return { ...p, status: 'wait-2'};
@@ -440,6 +442,7 @@ export default function AdminCourtsPage() {
           handleDelete={handleDelete} handleDragOver={handleDragOver}
           handleDrop={handleDrop} handleSlotClick={handleSlotClick}
           onOpenMemberPopup={() => setIsMemberPopupOpen(true)}
+          now = {now}
         />
         <CourtSection 
           viewMode="admin"
@@ -456,7 +459,7 @@ export default function AdminCourtsPage() {
 
       <CustomPopup popup={popup} onClose={closePopup} />
 
-      {/* 🌟 회원 불러오기 팝업 창 */}
+      {/* 회원 불러오기 팝업 창 */}
       {isMemberPopupOpen && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-[100] p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm flex flex-col overflow-hidden max-h-[80vh]">

@@ -220,7 +220,7 @@ export default function MonthlyMemberAttendancePage() {
                   <td className="px-6 py-4 font-bold text-slate-800 text-left">
                     {member.name}
                     {member.role === '모임장' && (
-                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-700">
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-700">
                         모임장
                       </span>
                     )}
