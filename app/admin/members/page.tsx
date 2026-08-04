@@ -70,7 +70,7 @@ export default function MemberManagementPage() {
     if (error) console.error("데이터 로드 에러:", error);
   };
 
-  // 🌟 오늘 날짜에 등록된 정모가 있는지 확인하는 공통 함수
+  // 오늘 날짜에 등록된 정모가 있는지 확인하는 공통 함수
   const checkTodayGatheringExists = async () => {
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;

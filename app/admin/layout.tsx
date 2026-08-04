@@ -1,15 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation'; // 🌟 useRouter 추가
+import { usePathname, useRouter } from 'next/navigation'; // useRouter 추가
 import { ReactNode, useEffect, useState } from 'react';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [isAuthorized, setIsAuthorized] = useState(false); // 🌟 인증 여부 상태
+  const [isAuthorized, setIsAuthorized] = useState(false); // 인증 여부 상태
 
-  // 🌟 방문증(세션) 검사 로직
+  // 방문증(세션) 검사 로직
   useEffect(() => {
     const isAdmin = sessionStorage.getItem('isAdmin');
     
@@ -28,7 +28,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     { name: '회원별 출석 관리', href: '/admin/member-attendance' },
   ];
 
-  // 🌟 인증을 확인하는 동안에는 빈 화면(또는 로딩)을 띄워 깜빡임 방지
+  // 인증을 확인하는 동안에는 빈 화면(또는 로딩)을 띄워 깜빡임 방지
   if (!isAuthorized) {
     return <div className="h-screen w-screen bg-slate-50 flex items-center justify-center">인증 확인 중...</div>;
   }
@@ -61,7 +61,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           })}
         </nav>
         
-        {/* 🌟 선택사항: 로그아웃 버튼 추가 */}
+        {/* 로그아웃 버튼 추가 */}
         <div className="p-4 border-t border-slate-800">
           <button 
             onClick={() => {

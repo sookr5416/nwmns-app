@@ -373,7 +373,7 @@ export default function AdminCourtsPage() {
           return;
         }
 
-        const currentGatheringId = newGathering.id; // 🌟 방금 생성된 정모의 ID 확보
+        const currentGatheringId = newGathering.id; // 방금 생성된 정모의 ID 확보
 
         const { data: allMembers } = await supabase.from('members').select('id, name, age, gender');
         
@@ -393,7 +393,7 @@ export default function AdminCourtsPage() {
             if (matchedMember) {
               if (!alreadyCheckedMemberIds.has(matchedMember.id)) {
                 attendanceInserts.push({
-                  gathering_id: currentGatheringId, // 🌟 여기서 gathering_id를 넣어줍니다!
+                  gathering_id: currentGatheringId,
                   member_id: matchedMember.id,
                   attended_date: todayDate
                 });

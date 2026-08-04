@@ -34,7 +34,7 @@ export default function MonthlyMemberAttendancePage() {
   const [showWarningOnly, setShowWarningOnly] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
 
-  // 🌟 페이징 및 '개수씩 보기' 상태 (디폴트 20명으로 변경)
+  // 페이징 및 '개수씩 보기' 상태 (디폴트 20명으로 변경)
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(20);
 
@@ -54,7 +54,6 @@ export default function MonthlyMemberAttendancePage() {
     
     if (attError) console.error('출석 데이터 조회 에러:', attError);
 
-    // 🌟 select 구문에서도 created_at 으로 조회
     const { data: memData, error: memError } = await supabase
       .from('members')
       .select('id, name, age, gender, grade, role, created_at')
@@ -121,7 +120,6 @@ export default function MonthlyMemberAttendancePage() {
         return rankA - rankB;
       }
 
-      // 🌟 가입일자 정렬 시에도 created_at 사용
       const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
       const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
 
@@ -242,7 +240,6 @@ export default function MonthlyMemberAttendancePage() {
                     {member.grade}조
                   </td>
                   <td className="px-6 py-4 text-slate-600 text-sm">
-                    {/* 🌟 테이블 데이터 렌더링 시에도 created_at 사용 */}
                     {formatJoinDate(member.created_at)}
                   </td>
                   <td className="px-6 py-4 font-bold text-slate-700">

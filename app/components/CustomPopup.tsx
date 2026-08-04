@@ -16,12 +16,12 @@ interface CustomPopupProps {
 }
 
 export default function CustomPopup({ popup, onClose }: CustomPopupProps) {
-  // 🌟 첫 번째 버튼을 가리키기 위한 Ref 생성
+  // 첫 번째 버튼을 가리키기 위한 Ref 생성
   const firstButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (popup.isOpen && firstButtonRef.current) {
-      // 팝업이 열리자마자 첫 번째 버튼에 포커스 지정
+      // 팝업이 열리자마자 확인 버튼에 포커스 지정
       firstButtonRef.current.focus();
     }
   }, [popup.isOpen]);
@@ -47,15 +47,14 @@ export default function CustomPopup({ popup, onClose }: CustomPopupProps) {
         <div className="px-6 py-4 bg-slate-50 flex gap-2 justify-end">
           {popup.type === 'confirm' ? (
             <>
-              {/* 🌟 'confirm' 타입일 때는 취소 버튼이 첫 번째 버튼이 되므로 여기에 ref 연결 */}
               <button 
-                ref={firstButtonRef}
                 onClick={onClose}
                 className="px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors focus:ring-2 focus:ring-slate-400 outline-none"
               >
                 취소
               </button>
               <button 
+                ref={firstButtonRef}
                 onClick={popup.onConfirm}
                 className="px-4 py-2 text-sm font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg transition-colors focus:ring-2 focus:ring-emerald-400 outline-none"
               >
@@ -63,7 +62,6 @@ export default function CustomPopup({ popup, onClose }: CustomPopupProps) {
               </button>
             </>
           ) : (
-            /* 🌟 'alert' 타입일 때는 확인 버튼이 첫 번째이자 유일한 버튼이므로 여기에 ref 연결 */
             <button 
               ref={firstButtonRef}
               onClick={popup.onConfirm}

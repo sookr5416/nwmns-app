@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, DragEvent, RefObject } from 'react';
+import { useState, FormEvent, DragEvent, RefObject } from 'react';
 import { Player } from '../types';
 
 interface LobbyPanelProps {
@@ -25,8 +25,7 @@ interface LobbyPanelProps {
   handleDrop: (e: DragEvent<HTMLDivElement>, targetSlotId: string) => void;
   handleSlotClick: (targetSlotId: string) => void;
   onOpenMemberPopup?: () => void;
-  // 🌟 부모 컴포넌트(AdminCourtsPage)에서 1초마다 갱신되는 현재 시간을 받아옴
-  now?: number; 
+  now?: number; // 부모 컴포넌트(AdminCourtsPage)에서 1초마다 갱신되는 현재 시간을 받아옴
 }
 
 export default function LobbyPanel({
@@ -35,7 +34,10 @@ export default function LobbyPanel({
   handleDelete, handleDragOver, handleDrop, handleSlotClick, onOpenMemberPopup, now = Date.now(),
 }: LobbyPanelProps) {
 
-  // 🌟 휴식 시간 계산 함수
+  const [sortMode, setSortMode] = useState<'count' | 'time' | 'name'>('count'); // 정렬 방식 상태 관리
+  const [isSortOpen, setIsSortOpen] = useState(false);                          // 정렬 드롭다운 메뉴 열림 여부
+
+  // 휴식 시간 계산 함수
   const getRestTime = (lastEndTime?: number) => {
     if (!lastEndTime) return null; // 한 번도 게임을 안 한 경우
     
@@ -90,6 +92,38 @@ export default function LobbyPanel({
           <h3 className="text-sm font-bold text-slate-600">전체 대기 선수 (로비)</h3>
           
           <div className="flex items-center gap-2">
+            {/* 정렬 필터 추가 */}
+            <div className="relative">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsSortOpen(!isSortOpen);
+                }}
+                className={`w-6 h-6 rounded-md flex items-center justify-center text-sm transition-colors border shadow-sm ${isSortOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
+                title="대기 명단 정렬"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+              </button>
+              
+              {/* 드롭다운 메뉴 */}
+              {isSortOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={(e) => { e.stopPropagation(); setIsSortOpen(false); }} />
+                  <div className="absolute right-0 top-full mt-1.5 w-36 bg-white border border-slate-200 shadow-xl rounded-lg overflow-hidden z-40">
+                    <button onClick={() => { setSortMode('count'); setIsSortOpen(false); }} className={`w-full text-left px-3 py-2 text-xs font-bold transition-colors ${sortMode === 'count' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+                      경기수 오름차순
+                    </button>
+                    <button onClick={() => { setSortMode('time'); setIsSortOpen(false); }} className={`w-full text-left px-3 py-2 text-xs font-bold transition-colors border-t border-slate-100 ${sortMode === 'time' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+                      대기 시간 내림차순
+                    </button>
+                    <button onClick={() => { setSortMode('name'); setIsSortOpen(false); }} className={`w-full text-left px-3 py-2 text-xs font-bold transition-colors border-t border-slate-100 ${sortMode === 'name' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+                      이름순
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
             <button 
               onClick={(e) => { 
                 e.stopPropagation();
@@ -107,14 +141,30 @@ export default function LobbyPanel({
         </div>
         
         <ul className="space-y-2 min-h-[200px]">
-          {players.filter(p => p.status === 'lobby').sort((a, b) => a.count - b.count).map((player) => {
-            // 해당 선수의 휴식 시간 계산
+          {players
+            .filter(p => p.status === 'lobby')
+            .sort((a, b) => {
+              // 경기수 오름차순 정렬 (경기수가 같을 경우 대기 시간이 긴 사람 우선)
+              if (sortMode === 'count') {
+                if (a.count !== b.count) return a.count - b.count;
+                return (a.last_game_end_time || 0) - (b.last_game_end_time || 0);
+              }
+              // 대기 시간 내림차순 (마지막으로 뛴 시간이 오래된 사람 = 값이 작은 사람이 우선)
+              if (sortMode === 'time') {
+                return (a.last_game_end_time || 0) - (b.last_game_end_time || 0);
+              }
+              // 이름순 정렬
+              if (sortMode === 'name') {
+                return a.name.localeCompare(b.name);
+              }
+              return 0;
+            })
+            .map((player) => {
             const restTime = getRestTime(player.last_game_end_time);
 
             return (
               <li key={player.id} draggable onDragStart={(e) => handleDragStart(e, player.id)} onClick={(e) => handlePlayerClick(player.id, e)} className={`flex items-center justify-between border p-3 rounded-lg shadow-sm transition-all group cursor-pointer ${player.gender === '남' ? 'bg-blue-50 border-blue-200 hover:border-blue-400' : 'bg-yellow-50 border-yellow-200 hover:border-yellow-400'} ${selectedPlayerId === player.id ? 'ring-4 ring-indigo-500 scale-[1.02]' : ''}`}>
                 
-                {/* 왼쪽 영역: 선수 정보 */}
                 <div className="flex items-center gap-3">
                   <div>
                     <span className="font-bold text-slate-700">{player.name}</span>
@@ -128,7 +178,6 @@ export default function LobbyPanel({
                   </div>
                 </div>
 
-                {/* 오른쪽 영역: 휴식 시간 + 삭제 버튼 */}
                 <div className="flex items-center gap-2.5">
                   {restTime && (
                     <span className="text-xs font-bold text-orange-500 whitespace-nowrap">

@@ -12,7 +12,7 @@ export default function UserHomePage() {
   const [courts, setCourts] = useState<Court[]>([]);
   const [now, setNow] = useState(Date.now());
 
-  // 🌟 로그인 팝업 상태 관리
+  // 로그인 팝업 상태 관리
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [adminId, setAdminId] = useState('');
   const [adminPw, setAdminPw] = useState('');
@@ -108,7 +108,7 @@ export default function UserHomePage() {
         formatTime={formatTime} 
       />
 
-      {/* 🌟 로그인 팝업 모달 */}
+      {/* 로그인 팝업 모달 */}
       {showLoginModal && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-[100] p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-fade-in">

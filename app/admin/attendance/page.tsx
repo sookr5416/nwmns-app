@@ -42,7 +42,7 @@ export default function GatheringManagementPage() {
   const [startTime, setStartTime] = useState('');
   const [memo, setMemo] = useState('');
 
-  // 🌟 수정 모달 관련 상태 추가
+  // 수정 모달 관련 상태 추가
   const [editingGathering, setEditingGathering] = useState<Gathering | null>(null);
   const [editLocation, setEditLocation] = useState('');
   const [editStartTime, setEditStartTime] = useState('');
@@ -104,7 +104,7 @@ export default function GatheringManagementPage() {
     }
   };
 
-  // 🌟 정모 정보 수정 클릭 핸들러
+  // 정모 정보 수정 클릭 핸들러
   const handleEditClick = (gathering: Gathering) => {
     setEditingGathering(gathering);
     setEditLocation(gathering.location);
@@ -112,7 +112,7 @@ export default function GatheringManagementPage() {
     setEditMemo(gathering.memo || '');
   };
 
-  // 🌟 정모 정보 업데이트 (DB 저장) 핸들러
+  // 정모 정보 업데이트 (DB 저장) 핸들러
   const handleUpdateGathering = async (e: FormEvent) => {
     e.preventDefault();
     if (!editingGathering) return;
@@ -321,7 +321,7 @@ export default function GatheringManagementPage() {
                         명단 확인 →
                       </button>
                       
-                      {/* 🌟 수정 버튼 추가 */}
+                      {/* 수정 버튼 추가 */}
                       <button 
                         onClick={() => handleEditClick(g)}
                         className="px-2.5 py-1.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
@@ -351,7 +351,7 @@ export default function GatheringManagementPage() {
         </div>
       </div>
 
-      {/* 🌟 정모 정보 수정 모달 */}
+      {/* 정모 정보 수정 모달 */}
       {editingGathering && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-up flex flex-col">
