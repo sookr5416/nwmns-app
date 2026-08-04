@@ -34,7 +34,7 @@ export default function MonthlyMemberAttendancePage() {
   const [showWarningOnly, setShowWarningOnly] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
 
-  // 페이징 및 '개수씩 보기' 상태 (디폴트 20명으로 변경)
+  // 페이징 및 '개수씩 보기' 상태
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(20);
 
@@ -129,7 +129,7 @@ export default function MonthlyMemberAttendancePage() {
     return result;
   }, [processedMembers, searchTerm, showWarningOnly]);
 
-  const totalPages = Math.ceil(filteredMembers.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredMembers.length / itemsPerPage) || 1;
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentMembers = filteredMembers.slice(startIndex, startIndex + itemsPerPage);
 
@@ -148,7 +148,6 @@ export default function MonthlyMemberAttendancePage() {
         </div>
       </div>
 
-      {/* 컨트롤 패널 */}
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="flex items-center gap-3 w-full md:w-auto">
           <input 
@@ -179,16 +178,19 @@ export default function MonthlyMemberAttendancePage() {
         </div>
       </div>
 
-      {/* 회원 명단 테이블 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-          <span className="text-sm font-bold text-slate-600">
-            조회된 인원: 총 <span className="text-indigo-600">{filteredMembers.length}</span>명
-          </span>
-          <select
-            value={itemsPerPage}
-            onChange={(e) => setItemsPerPage(Number(e.target.value))}
-            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+      <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+        <div className="flex items-center gap-4">
+          <div className="text-slate-700 font-bold text-lg">
+            총 회원 수 : <span className="text-indigo-600">{members.length}</span> 명
+            {(searchTerm || showWarningOnly) && <span className="text-sm text-slate-400 ml-2">(검색 결과: {filteredMembers.length}명)</span>}
+          </div>
+        </div>
+        
+        <div className="flex flex-col md:flex-row items-center gap-2 w-full md:w-auto">
+          <select 
+            value={itemsPerPage} 
+            onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-lg font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
           >
             <option value={10}>10명씩 보기</option>
             <option value={20}>20명씩 보기</option>
@@ -196,9 +198,13 @@ export default function MonthlyMemberAttendancePage() {
             <option value={100}>100명씩 보기</option>
           </select>
         </div>
+      </div>
+
+      {/* 회원 명단 테이블 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-center whitespace-nowrap">
-            <thead className="bg-white border-b border-slate-200 text-slate-500 text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm">
               <tr>
                 <th className="px-6 py-4 font-bold w-16">No</th>
                 <th className="px-6 py-4 font-bold text-left">이름</th>
@@ -218,17 +224,17 @@ export default function MonthlyMemberAttendancePage() {
                   <td className="px-6 py-4 font-bold text-slate-800 text-left">
                     {member.name}
                     {member.role === '모임장' && (
-                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-700">
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200">
                         모임장
                       </span>
                     )}
                     {member.role === '운영진' && (
-                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700">
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200">
                         운영진
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-slate-600">
+                  <td className="px-6 py-4 text-slate-600 text-sm font-medium">
                     {formatDOB(member.age)}
                   </td>
                   <td className="px-6 py-4 text-slate-600">
@@ -236,14 +242,16 @@ export default function MonthlyMemberAttendancePage() {
                       {member.gender}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-slate-700 font-medium">
+                  <td className="px-6 py-4 text-slate-700 font-bold">
                     {member.grade}조
                   </td>
-                  <td className="px-6 py-4 text-slate-600 text-sm">
+                  <td className="px-6 py-4 text-slate-600 text-sm font-medium">
                     {formatJoinDate(member.created_at)}
                   </td>
                   <td className="px-6 py-4 font-bold text-slate-700">
-                    {member.monthlyCount}회
+                    <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full ${member.monthlyCount <= 2 ? 'bg-red-50 text-red-600' : 'bg-indigo-50 text-indigo-700'}`}>
+                      {member.monthlyCount}
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -258,44 +266,43 @@ export default function MonthlyMemberAttendancePage() {
             </tbody>
           </table>
         </div>
-
-        {/* 페이징 컨트롤러 */}
-        {totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-center gap-2 bg-white">
-            <button
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-              className="px-3 py-1.5 rounded-lg text-sm font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
-            >
-              이전
-            </button>
-            
-            <div className="flex gap-1">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-                <button
-                  key={pageNum}
-                  onClick={() => handlePageChange(pageNum)}
-                  className={`min-w-[32px] h-8 flex items-center justify-center rounded-lg text-sm font-bold transition-colors ${
-                    currentPage === pageNum
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              ))}
-            </div>
-
-            <button
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className="px-3 py-1.5 rounded-lg text-sm font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors"
-            >
-              다음
-            </button>
-          </div>
-        )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-2 mt-6">
+          <button 
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+          >
+            이전
+          </button>
+          
+          <div className="flex gap-1">
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                className={`w-10 h-10 rounded-lg text-sm font-bold transition-colors ${
+                  currentPage === page 
+                    ? 'bg-indigo-600 text-white shadow-md' 
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {page}
+              </button>
+            ))}
+          </div>
+
+          <button 
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+          >
+            다음
+          </button>
+        </div>
+      )}
     </div>
   );
 }

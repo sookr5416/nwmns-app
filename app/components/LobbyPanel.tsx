@@ -89,7 +89,7 @@ export default function LobbyPanel({
       <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'lobby')} onClick={() => handleSlotClick('lobby')}>
         
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-bold text-slate-600">전체 대기 선수 (로비)</h3>
+          <h3 className="text-sm font-bold text-slate-600">전체 대기 선수</h3>
           
           <div className="flex items-center gap-2">
             {/* 정렬 필터 추가 */}
