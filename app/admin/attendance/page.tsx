@@ -16,7 +16,7 @@ export default function GatheringManagementPage() {
   const [gatheringList, setGatheringList] = useState<Gathering[]>([]);
   const [selectedGathering, setSelectedGathering] = useState<Gathering | null>(null);
   const [gatheringAttendees, setGatheringAttendees] = useState<any[]>([]);
-  const [allDbMembers, setAllDbMembers] = useState<any[]>([]);                         // DB 전체 회원 목록 (명단 수정 - 인원 추가 시 사용)
+  const [allDbMembers, setAllDbMembers] = useState<any[]>([]); // DB 전체 회원 목록
 
   const todayStr = () => {
     const now = new Date();
@@ -28,20 +28,21 @@ export default function GatheringManagementPage() {
   const [startTime, setStartTime] = useState('');
   const [memo, setMemo] = useState('');
 
-  // 검색 및 페이징 상태 추가
+  // 검색 및 페이징 상태
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
-  // 수정 모달 관련 상태 추가
+  // 정모 수정 모달 관련 상태
   const [editingGathering, setEditingGathering] = useState<Gathering | null>(null);
   const [editLocation, setEditLocation] = useState('');
   const [editStartTime, setEditStartTime] = useState('');
   const [editMemo, setEditMemo] = useState('');
 
-  // 명단 팝업 수정 모드 상태
+  // 명단 팝업 '일괄 수정' 모드 상태
   const [isEditingAttendance, setIsEditingAttendance] = useState(false);
   const [attendanceSearchTerm, setAttendanceSearchTerm] = useState('');
+  const [editAttendees, setEditAttendees] = useState<any[]>([]); // 임시 저장용 장바구니
 
   const [popup, setPopup] = useState<PopupState>({
     isOpen: false,
@@ -70,9 +71,8 @@ export default function GatheringManagementPage() {
     if (data) setGatheringList(data);
   };
 
-  // 전체 회원 목록 로드 함수
   const fetchAllMembers = async () => {
-    const { data } = await supabase.from('members').select('id, name, age, gender, grade, role, created_at');
+    const { data } = await supabase.from('members').select('id, name, age, gender, grade, role, created_at').eq('del_type', 'N');
     if (data) setAllDbMembers(data);
   };
 
@@ -145,10 +145,8 @@ export default function GatheringManagementPage() {
 
   const handleDeleteGathering = (e: React.MouseEvent, id: string, dateStr: string) => {
     e.stopPropagation();
-    
     showPopup('confirm', '정모 삭제', `${formatDateString(dateStr)} 정모 일정을 삭제하시겠습니까?\n(해당 일자의 정회원 및 게스트 출석 기록도 함께 모두 삭제됩니다.)`, async () => {
       closePopup();
-      
       await supabase.from('attendances').delete().eq('gathering_id', id);
       await supabase.from('guest_attendances').delete().eq('gathering_id', id);
       const { error } = await supabase.from('gatherings').delete().eq('id', id);
@@ -163,15 +161,15 @@ export default function GatheringManagementPage() {
     });
   };
 
-  // 명단 팝업을 열 때 호출 (attendance_id 포함해서 조회)
+  // 명단 데이터를 불러오기만 하고 상태에 저장 (정렬은 렌더링 시점에 수행)
   const handleSelectGathering = async (gathering: Gathering) => {
     setSelectedGathering(gathering);
-    setIsEditingAttendance(false); // 창 열 때 수정 모드 초기화
+    setIsEditingAttendance(false); 
     setAttendanceSearchTerm('');
+    setEditAttendees([]);
 
     let allAttendees: any[] = [];
 
-    // 정회원 (attendances 테이블의 id 도 함께 select)
     const { data: memberData } = await supabase
       .from('attendances')
       .select('id, members(id, name, age, gender, grade, role, created_at)')
@@ -182,32 +180,13 @@ export default function GatheringManagementPage() {
         if (!item.members) return null;
         return {
           ...item.members,
-          attendance_id: item.id, // 삭제할 때 사용할 고유 키
+          attendance_id: item.id,
           is_guest: false
         };
       }).filter(Boolean);
-      
-      regulars.sort((a: any, b: any) => {
-        const getRoleRank = (role: string) => {
-          if (role === '모임장') return 1;
-          if (role === '운영진') return 2;
-          return 3; 
-        };
-
-        const rankA = getRoleRank(a.role);
-        const rankB = getRoleRank(b.role);
-
-        if (rankA !== rankB) return rankA - rankB;
-
-        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-        return dateA - dateB;
-      });
-
       allAttendees = [...allAttendees, ...regulars];
     }
 
-    // 게스트
     const { data: guestData } = await supabase
       .from('guest_attendances')
       .select('*')
@@ -216,50 +195,65 @@ export default function GatheringManagementPage() {
     if (guestData) {
       const guests = guestData.map(g => ({
         ...g,
-        attendance_id: g.id, // 삭제할 때 사용할 고유 키
+        attendance_id: g.id, 
         role: '게스트',
         is_guest: true
       }));
-      guests.sort((a, b) => a.name.localeCompare(b.name));
       allAttendees = [...allAttendees, ...guests];
     }
 
     setGatheringAttendees(allAttendees);
   };
 
-  // 명단에서 개별 삭제 함수
-  const handleDeleteAttendee = (attendanceId: string, isGuest: boolean, memberName: string) => {
-    showPopup('confirm', '명단 삭제', `${memberName} 님을 참석 명단에서 삭제하시겠습니까?`, async () => {
-      closePopup();
-      
-      const tableName = isGuest ? 'guest_attendances' : 'attendances';
-      const { error } = await supabase.from(tableName).delete().eq('id', attendanceId);
-      
-      if (error) {
-        showPopup('alert', '오류', '삭제 중 오류가 발생했습니다.');
-      } else {
-        // UI에서 즉시 제거
-        setGatheringAttendees(prev => prev.filter(a => a.attendance_id !== attendanceId));
-      }
-    });
+  // [임시 저장소] 로컬 명단에서 삭제 (빠른 UI 반영)
+  const handleDeleteAttendeeLocal = (attendanceId: string) => {
+    setEditAttendees(prev => prev.filter(a => a.attendance_id !== attendanceId));
   };
 
-  // 명단에 새로운 인원(정회원) 추가 함수
-  const handleAddAttendee = async (member: any) => {
+  // [임시 저장소] 로컬 명단에 추가 (빠른 UI 반영)
+  const handleAddAttendeeLocal = (member: any) => {
+    setEditAttendees(prev => [...prev, {
+      ...member,
+      attendance_id: `temp_${Date.now()}_${member.id}`, // 임시 ID 부여
+      is_guest: false,
+      is_new: true // 새로 추가된 데이터임을 표시
+    }]);
+    setAttendanceSearchTerm(''); // 검색창 비워주기
+  };
+
+  // [최종 완료] DB에 변경사항(추가 및 삭제) 한 번에 전송
+  const handleSaveAttendanceChanges = async () => {
     if (!selectedGathering) return;
 
-    const { data, error } = await supabase.from('attendances').insert([{
-      gathering_id: selectedGathering.id,
-      member_id: member.id,
-      attended_date: selectedGathering.gathering_date
-    }]).select('id').single();
+    // 기존 ID 목록과 현재 남은 ID 목록을 비교
+    const currentIds = editAttendees.map(a => a.attendance_id);
+    const deletedOriginals = gatheringAttendees.filter(a => !currentIds.includes(a.attendance_id));
+    const addedMembers = editAttendees.filter(a => a.is_new);
 
-    if (error || !data) {
-      showPopup('alert', '오류', '명단 추가 중 오류가 발생했습니다.');
-    } else {
-      setAttendanceSearchTerm(''); // 검색창 초기화
-      // DB에 반영되었으므로 명단을 재조회해서 깔끔하게 정렬 적용
-      handleSelectGathering(selectedGathering);
+    try {
+      // 1. 삭제된 인원 DB 반영
+      for (const del of deletedOriginals) {
+        const tableName = del.is_guest ? 'guest_attendances' : 'attendances';
+        await supabase.from(tableName).delete().eq('id', del.attendance_id);
+      }
+
+      // 2. 새로 추가된 인원 DB 반영 (Bulk Insert)
+      if (addedMembers.length > 0) {
+        const inserts = addedMembers.map(m => ({
+          gathering_id: selectedGathering.id,
+          member_id: m.id,
+          attended_date: selectedGathering.gathering_date
+        }));
+        await supabase.from('attendances').insert(inserts);
+      }
+
+      showPopup('alert', '수정 완료', '명단이 성공적으로 저장되었습니다.');
+      
+      // 상태 초기화 및 최신화
+      setIsEditingAttendance(false);
+      handleSelectGathering(selectedGathering); 
+    } catch (error) {
+      showPopup('alert', '오류', '명단 저장 중 오류가 발생했습니다.');
     }
   };
 
@@ -289,8 +283,25 @@ export default function GatheringManagementPage() {
     }
   };
 
-  const regulars = gatheringAttendees.filter(m => !m.is_guest);
-  const guests = gatheringAttendees.filter(m => m.is_guest);
+  // 화면에 보여줄 명단 (수정 중이면 로컬 임시명단, 아니면 원본)
+  const displayAttendees = isEditingAttendance ? editAttendees : gatheringAttendees;
+
+  // 렌더링 직전에 역할순, 이름순으로 깔끔하게 정렬
+  const regulars = displayAttendees.filter(m => !m.is_guest).sort((a: any, b: any) => {
+    const getRoleRank = (role: string) => {
+      if (role === '모임장') return 1;
+      if (role === '운영진') return 2;
+      return 3; 
+    };
+    const rankA = getRoleRank(a.role);
+    const rankB = getRoleRank(b.role);
+    if (rankA !== rankB) return rankA - rankB;
+    const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return dateA - dateB;
+  });
+
+  const guests = displayAttendees.filter(m => m.is_guest).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="p-6 w-full flex-1 overflow-y-auto min-h-screen">
@@ -555,40 +566,52 @@ export default function GatheringManagementPage() {
         </div>
       )}
 
-      {/* 명단 팝업 부분 */}
+      {/* 명단 팝업 창 */}
       {selectedGathering && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-scale-up flex flex-col max-h-[85vh]">
             <div className="px-6 py-4 bg-indigo-50/50 border-b border-indigo-100 flex justify-between items-center">
               <div>
                 <h3 className="text-lg font-bold text-indigo-900">{formatDateString(selectedGathering.gathering_date)} 정모 명단</h3>
-                <p className="text-xs text-indigo-600 font-medium mt-0.5">{selectedGathering.location} ({selectedGathering.start_time}) · 총 {gatheringAttendees.length}명 참석</p>
+                <p className="text-xs text-indigo-600 font-medium mt-0.5">{selectedGathering.location} ({selectedGathering.start_time}) · 총 {displayAttendees.length}명 참석</p>
               </div>
               <div className="flex items-center gap-2">
-                {/* 명단 수정 토글 버튼 */}
-                <button
-                  onClick={() => {
-                    setIsEditingAttendance(!isEditingAttendance);
-                    setAttendanceSearchTerm('');
-                  }}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${
-                    isEditingAttendance 
-                      ? 'bg-indigo-600 text-white shadow-sm' 
-                      : 'bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50'
-                  }`}
-                >
-                  {isEditingAttendance ? '수정 완료' : '명단 수정'}
-                </button>
+                
+                {/* 상태에 따른 버튼 표시 분기 */}
+                {isEditingAttendance ? (
+                  <button
+                    onClick={handleSaveAttendanceChanges}
+                    className="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors bg-indigo-600 text-white shadow-sm hover:bg-indigo-700"
+                  >
+                    수정 완료
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setIsEditingAttendance(true);
+                      setEditAttendees([...gatheringAttendees]); // 진입 시 기존 데이터 복사
+                      setAttendanceSearchTerm('');
+                    }}
+                    className="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50"
+                  >
+                    명단 수정
+                  </button>
+                )}
+
                 <button 
-                  onClick={() => setSelectedGathering(null)}
-                  className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-500 hover:bg-slate-100 transition-colors"
+                  onClick={() => {
+                    setSelectedGathering(null);
+                    setIsEditingAttendance(false);
+                    setEditAttendees([]);
+                  }}
+                  className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-500 hover:bg-slate-100 transition-colors ml-2"
                 >
                   ✕
                 </button>
               </div>
             </div>
             
-            {/* 수정 모드일 때만 보이는 인원 추가 검색 바 */}
+            {/* 인원 추가 검색 바 (수정 모드 시) */}
             {isEditingAttendance && (
               <div className="p-4 bg-slate-50 border-b border-slate-100 relative">
                 <div className="relative">
@@ -604,13 +627,13 @@ export default function GatheringManagementPage() {
                   </svg>
                 </div>
                 
-                {/* 검색 결과 드롭다운 */}
+                {/* 현재 임시 장바구니(displayAttendees)를 기준으로 중복 여부 확인 */}
                 {attendanceSearchTerm && (
                   <div className="absolute left-4 right-4 top-full mt-1 bg-white border border-slate-200 shadow-xl rounded-lg max-h-48 overflow-y-auto z-10">
                     {allDbMembers
-                      .filter(m => m.name.includes(attendanceSearchTerm) && !gatheringAttendees.some(a => a.id === m.id))
+                      .filter(m => m.name.includes(attendanceSearchTerm) && !displayAttendees.some(a => a.id === m.id))
                       .map(m => (
-                        <div key={m.id} className="flex justify-between items-center p-3 border-b border-slate-50 hover:bg-slate-50 cursor-pointer" onClick={() => handleAddAttendee(m)}>
+                        <div key={m.id} className="flex justify-between items-center p-3 border-b border-slate-50 hover:bg-slate-50 cursor-pointer" onClick={() => handleAddAttendeeLocal(m)}>
                           <div>
                             <span className="text-sm font-bold text-slate-700">{m.name}</span>
                             <span className="text-xs text-slate-500 ml-2">{m.gender} · {m.grade}조</span>
@@ -618,7 +641,7 @@ export default function GatheringManagementPage() {
                           <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-md border border-indigo-100">추가</span>
                         </div>
                       ))}
-                    {allDbMembers.filter(m => m.name.includes(attendanceSearchTerm) && !gatheringAttendees.some(a => a.id === m.id)).length === 0 && (
+                    {allDbMembers.filter(m => m.name.includes(attendanceSearchTerm) && !displayAttendees.some(a => a.id === m.id)).length === 0 && (
                       <div className="p-4 text-center text-xs text-slate-400 font-medium">검색된 회원이 없거나 이미 명단에 있습니다.</div>
                     )}
                   </div>
@@ -634,6 +657,7 @@ export default function GatheringManagementPage() {
                     <span className="w-6 text-xs font-bold text-slate-400">{idx + 1}</span>
                     <div className="flex items-center gap-1.5">
                       <span className="font-bold text-slate-800 text-base">{member.name}</span>
+                      {member.is_new && <span className="bg-orange-100 text-orange-600 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">New</span>}
                       {member.role === '모임장' && (
                         <span className="bg-purple-100 text-purple-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full border border-purple-200">
                           모임장
@@ -650,10 +674,10 @@ export default function GatheringManagementPage() {
                     <span className={`text-xs font-bold px-2 py-0.5 rounded ${member.gender === '남' ? 'text-blue-700 bg-blue-100' : 'text-yellow-800 bg-yellow-100'}`}>{member.gender}</span>
                     <span className="font-bold text-slate-700">{member.grade}조</span>
                     
-                    {/* 수정 모드일 때 삭제 버튼 표시 */}
+                    {/* 팝업 없이 즉시 로컬 삭제 */}
                     {isEditingAttendance && (
                       <button
-                        onClick={() => handleDeleteAttendee(member.attendance_id, member.is_guest, member.name)}
+                        onClick={() => handleDeleteAttendeeLocal(member.attendance_id)}
                         className="ml-2 px-2.5 py-1 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-md text-xs font-bold transition-colors border border-red-100 hover:border-red-500"
                       >
                         삭제
@@ -678,10 +702,10 @@ export default function GatheringManagementPage() {
                     <span className={`text-xs font-bold px-2 py-0.5 rounded ${member.gender === '남' ? 'text-blue-700 bg-blue-100' : 'text-yellow-800 bg-yellow-100'}`}>{member.gender}</span>
                     <span className="font-bold text-slate-700">{member.grade}조</span>
 
-                    {/* 수정 모드일 때 삭제 버튼 표시 */}
+                    {/* 팝업 없이 즉시 로컬 삭제 */}
                     {isEditingAttendance && (
                       <button
-                        onClick={() => handleDeleteAttendee(member.attendance_id, member.is_guest, member.name)}
+                        onClick={() => handleDeleteAttendeeLocal(member.attendance_id)}
                         className="ml-2 px-2.5 py-1 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-md text-xs font-bold transition-colors border border-red-100 hover:border-red-500"
                       >
                         삭제
@@ -691,7 +715,7 @@ export default function GatheringManagementPage() {
                 </div>
               ))}
 
-              {gatheringAttendees.length === 0 && (
+              {displayAttendees.length === 0 && (
                 <div className="text-center py-10 text-slate-400 font-medium">
                   이 날짜에 출석 체크된 인원이 없습니다.
                 </div>
@@ -699,11 +723,7 @@ export default function GatheringManagementPage() {
 
             </div>
             
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 text-right">
-              <button onClick={() => setSelectedGathering(null)} className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm">
-                확인
-              </button>
-            </div>
+            {/* 하단 버튼 제거 - 상단 헤더로 통합됨 */}
           </div>
         </div>
       )}
