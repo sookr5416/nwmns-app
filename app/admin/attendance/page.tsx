@@ -547,7 +547,7 @@ export default function GatheringManagementPage() {
                   type="submit"
                   className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors"
                 >
-                  저장하기
+                  저장
                 </button>
               </div>
             </form>
@@ -635,12 +635,12 @@ export default function GatheringManagementPage() {
                     <div className="flex items-center gap-1.5">
                       <span className="font-bold text-slate-800 text-base">{member.name}</span>
                       {member.role === '모임장' && (
-                        <span className="bg-purple-100 text-purple-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded border border-purple-200">
+                        <span className="bg-purple-100 text-purple-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full border border-purple-200">
                           모임장
                         </span>
                       )}
                       {member.role === '운영진' && (
-                        <span className="bg-blue-100 text-blue-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded border border-blue-200">
+                        <span className="bg-blue-100 text-blue-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full border border-blue-200">
                           운영진
                         </span>
                       )}

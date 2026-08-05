@@ -355,7 +355,7 @@ export default function MemberManagementPage() {
       </div>
 
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-6">
-        <h2 className="text-lg font-bold text-slate-700 mb-4">신규 회원 등록 (일반)</h2>
+        <h2 className="text-lg font-bold text-slate-700 mb-4">신규 회원 등록</h2>
         <form onSubmit={handleRegisterMember} className="flex flex-col md:flex-row gap-4 w-full">
           
           <div className="flex flex-col">

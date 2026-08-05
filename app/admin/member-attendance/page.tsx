@@ -225,12 +225,12 @@ export default function MonthlyMemberAttendancePage() {
                   <td className="px-6 py-4 font-bold text-slate-800 text-left">
                     {member.name}
                     {member.role === '모임장' && (
-                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200">
                         모임장
                       </span>
                     )}
                     {member.role === '운영진' && (
-                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200">
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200">
                         운영진
                       </span>
                     )}

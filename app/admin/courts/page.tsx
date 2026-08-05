@@ -560,7 +560,7 @@ export default function AdminCourtsPage() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm flex flex-col overflow-hidden max-h-[80vh]">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h2 className="text-lg font-extrabold text-slate-800">기존 회원 불러오기</h2>
-              <button onClick={() => setIsMemberPopupOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => {setIsMemberPopupOpen(false); setMemberSearchTerm('');}} className="text-slate-400 hover:text-slate-600">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
               </button>
             </div>
@@ -579,7 +579,13 @@ export default function AdminCourtsPage() {
               {dbMembers
                 .filter(m => m.name.includes(memberSearchTerm))
                 .map(member => {
-                  const isAdded = players.some(p => p.name === member.name && p.gender === member.gender && p.role === member.role);
+                  const isAdded = players.some(p => {
+                    const playerAge = String(p.age).replace(/[^0-9]/g, '');
+                    const memberAge = String(member.age).replace(/[^0-9]/g, '');
+                    
+                    return p.name === member.name && p.gender === member.gender && playerAge === memberAge && p.role === member.role;
+                  });
+
                   return (
                     <div key={member.id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition-colors border-b border-slate-50 last:border-0">
                       <div>
