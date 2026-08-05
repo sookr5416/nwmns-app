@@ -57,6 +57,7 @@ export default function MonthlyMemberAttendancePage() {
     const { data: memData, error: memError } = await supabase
       .from('members')
       .select('id, name, age, gender, grade, role, created_at')
+      .eq('del_type', 'N')
       .order('name');
 
     if (memError) console.error('회원 데이터 조회 에러:', memError);

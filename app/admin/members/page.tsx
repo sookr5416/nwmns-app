@@ -17,6 +17,8 @@ interface Member {
   grade: string;
   role: string;
   created_at: string;
+  del_type?: string;
+  del_reason?: string;
   attendances?: Attendance[]; 
 }
 
@@ -43,6 +45,11 @@ export default function MemberManagementPage() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   });
 
+  // 삭제(탈퇴) 사유 입력 모달 상태 추가
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
+
   const [popup, setPopup] = useState<PopupState>({
     isOpen: false,
     type: 'alert',
@@ -65,12 +72,15 @@ export default function MemberManagementPage() {
   }, [searchTerm]);
 
   const fetchMembers = async () => {
-    const { data, error } = await supabase.from('members').select('*, attendances(id, attended_date)');
+    const { data, error } = await supabase
+      .from('members')
+      .select('*, attendances(id, attended_date)')
+      .eq('del_type', 'N');
+
     if (data) setMembers(data);
     if (error) console.error("데이터 로드 에러:", error);
   };
 
-  // 오늘 날짜에 등록된 정모가 있는지 확인하는 공통 함수
   const checkTodayGatheringExists = async () => {
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -170,17 +180,65 @@ export default function MemberManagementPage() {
     });
   };
 
-  const handleDeleteMember = (id: string, memberName: string) => {
-    showPopup('confirm', '회원 삭제', `${memberName} 회원을 정말 삭제하시겠습니까?\n(삭제 시 출석 기록도 모두 영구적으로 지워집니다.)`, async () => {
-      closePopup();
-      await supabase.from('members').delete().eq('id', id);
-      setMembers(members.filter(m => m.id !== id));
-      setSelectedMemberIds(selectedMemberIds.filter(selId => selId !== id)); 
-    });
+  // 삭제 버튼 클릭 시 모달창 열기
+  const handleDeleteMemberClick = (id: string, memberName: string) => {
+    setMemberToDelete({ id, name: memberName });
+    setDeleteReason(''); // 열 때마다 사유 입력칸 초기화
+    setIsDeleteModalOpen(true);
+  };
+
+  // 모달창에서 '삭제하기' 버튼 클릭 시 실제 DB 처리 로직
+  const executeDelete = async () => {
+    if (!memberToDelete) return;
+    const { id, name } = memberToDelete;
+
+    // 해당 회원의 출석 기록이 있는지 확인
+    const { data: attendanceData, error: attendanceError } = await supabase
+      .from('attendances')
+      .select('id')
+      .eq('member_id', id)
+      .limit(1);
+
+    if (attendanceError) {
+      setIsDeleteModalOpen(false);
+      return showPopup('alert', '오류', '출석 기록 조회 중 오류가 발생했습니다.');
+    }
+
+    const hasAttendance = attendanceData && attendanceData.length > 0;
+
+    if (hasAttendance) {
+      // 출석 기록이 있는 경우, del_type = 'Y' 및 del_reason 업데이트
+      const { error: updateError } = await supabase
+        .from('members')
+        .update({ del_type: 'Y', del_reason: deleteReason })
+        .eq('id', id);
+
+      if (updateError) {
+        setIsDeleteModalOpen(false);
+        return showPopup('alert', '오류', '회원 비활성화 처리 중 오류가 발생했습니다.');
+      }
+    } else {
+      // 출석 기록이 없는 경우, 실제로 DB에서 영구 삭제
+      const { error: deleteError } = await supabase
+        .from('members')
+        .delete()
+        .eq('id', id);
+
+      if (deleteError) {
+        setIsDeleteModalOpen(false);
+        return showPopup('alert', '오류', '회원 삭제 처리 중 오류가 발생했습니다.');
+      }
+    }
+
+    // UI 화면에서 즉시 제거 및 모달 닫기
+    setMembers(members.filter(m => m.id !== id));
+    setSelectedMemberIds(selectedMemberIds.filter(selId => selId !== id)); 
+    setIsDeleteModalOpen(false);
+    setMemberToDelete(null);
+    showPopup('alert', '삭제 완료', hasAttendance ? '출석 기록이 존재하여 안전하게 비활성화 처리되었습니다.' : '회원이 성공적으로 삭제되었습니다.');
   };
 
   const handleCheckIn = async (memberId: string, memberName: string) => {
-    // 오늘 당일 정모 개설 여부 확인
     const hasGathering = await checkTodayGatheringExists();
     if (!hasGathering) {
       return showPopup('alert', '출석 불가', '오늘 등록된 정모 일정이 없어 출석 처리할 수 없습니다.\n[정모 정보 및 일정 관리] 메뉴에서 오늘 일정을 먼저 등록해주세요.');
@@ -434,6 +492,8 @@ export default function MemberManagementPage() {
               const isCheckedToday = member.attendances?.some(a => a.attended_date === today);
               const isSelected = selectedMemberIds.includes(member.id);
 
+              const isStaff = member.role === '모임장' || member.role === '운영진';
+
               return (
                 <tr key={member.id} className={`transition-colors ${isSelected ? 'bg-indigo-50/50' : 'hover:bg-slate-50/50'}`}>
                   <td className="px-4 py-4 text-center">
@@ -487,7 +547,17 @@ export default function MemberManagementPage() {
                         {member.role === '일반' ? '운영진 부여' : '운영진 해제'}
                       </button>
                     )}
-                    <button onClick={() => handleDeleteMember(member.id, member.name)} className="px-2 py-1.5 text-sm font-medium text-red-500 bg-red-50 hover:bg-red-500 hover:text-white rounded-md transition-colors">삭제</button>
+                    <button onClick={() => handleDeleteMemberClick(member.id, member.name)}
+                      disabled={isStaff}
+                      title={isStaff ? '모임장/운영진은 삭제할 수 없습니다.' : '회원 삭제'} 
+                      className={`px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                        isStaff
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                          : 'bg-red-100 text-red-700 hover:bg-red-200'
+                      }`}
+                    >
+                      삭제
+                    </button>
                   </td>
                 </tr>
               );
@@ -537,6 +607,58 @@ export default function MemberManagementPage() {
           >
             다음
           </button>
+        </div>
+      )}
+
+      {/* 사유를 입력받는 삭제 전용 모달창 */}
+      {isDeleteModalOpen && memberToDelete && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
+            <div className="px-6 py-4 bg-red-50 border-b border-red-100 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-red-700">회원 삭제</h3>
+              <button
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white border border-red-200 flex items-center justify-center font-bold text-red-500 hover:bg-red-100 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <p className="text-sm text-slate-600 leading-relaxed">
+                <strong className="text-slate-800 text-base">{memberToDelete.name}</strong> 회원을 정말 삭제하시겠습니까?<br/>
+                (과거 출석 기록이 있다면 안전하게 비활성화 처리됩니다.)
+              </p>
+
+              <div className="flex flex-col">
+                <label className="text-xs font-bold text-slate-500 mb-2">
+                  삭제(탈퇴) 사유 <span className="text-slate-400 font-normal">(선택사항)</span>
+                </label>
+                <input
+                  type="text"
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  placeholder="예: 이사, 개인사정, 활동 중단 등"
+                  className="px-4 py-2.5 bg-slate-50 border border-slate-200 focus:border-red-400 focus:ring-1 focus:ring-red-400 outline-none rounded-lg transition-all text-sm font-medium"
+                />
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex gap-2 justify-end">
+              <button
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="px-5 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={executeDelete}
+                className="px-5 py-2 text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg shadow-sm transition-colors"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

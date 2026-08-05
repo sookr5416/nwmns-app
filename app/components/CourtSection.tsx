@@ -58,13 +58,16 @@ export default function CourtSection({
             return (orderWeight[a.type] || 99) - (orderWeight[b.type] || 99) || (a.order_idx - b.order_idx);
           })
           .map((slot) => {
-            if (viewMode === 'user' && slot.type === 'lesson') return null;
+            // 레슨 코트와 종료 코트는 유저 모드에서 숨김
+            if (viewMode === 'user' && (slot.type === 'lesson' || slot.type === 'end')) return null;
 
             const slotPlayers = players.filter(p => p.status === slot.id);
             const isGameCourt = slot.type === 'game';
             const isLesson = slot.type === 'lesson';
             const isEnd = slot.type === 'end';
             
+            const hasNoLimit = isLesson || isEnd;
+
             return (
               <div key={slot.id} className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden transition-all hover:shadow-md">
                 {/* 상단 헤더: 공간을 효율적으로 배분하여 줄바꿈 방지 */}
@@ -84,11 +87,10 @@ export default function CourtSection({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-xs font-bold ${(!isLesson && slotPlayers.length >= 4) ? 'text-red-300' : 'text-slate-200'}`}>
-                      {isLesson ? `${slotPlayers.length}명` : `${slotPlayers.length}/4명`}
+                    <span className={`text-xs font-bold ${(!hasNoLimit && slotPlayers.length >= 4) ? 'text-red-300' : 'text-slate-200'}`}>
+                      {hasNoLimit ? `${slotPlayers.length}명` : `${slotPlayers.length}/4명`}
                     </span>
 
-                    {/* 컴팩트하고 세련된 삭제 버튼 */}
                     {viewMode === 'admin' && isGameCourt && onDeleteCourt && (
                       <button
                         onClick={() => onDeleteCourt(slot.id)}

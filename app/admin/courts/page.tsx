@@ -114,7 +114,10 @@ export default function AdminCourtsPage() {
 
   // 기존 정회원 목록 가져오기 (운영진 최상단, 가입일순 정렬)
   const fetchDbMembers = async () => {
-    const { data } = await supabase.from('members').select('id, name, age, gender, grade, role, created_at, role');
+    const { data } = await supabase
+      .from('members')
+      .select('id, name, age, gender, grade, role, created_at, role')
+      .eq('del_type', 'N');
     
     if (data) {
       const membersData = data as DbMember[];

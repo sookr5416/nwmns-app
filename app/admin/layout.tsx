@@ -26,6 +26,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     { name: '회원 명단 관리', href: '/admin/members' },
     { name: '정모 일정 관리', href: '/admin/attendance' },
     { name: '회원별 출석 관리', href: '/admin/member-attendance' },
+    { name: '탈퇴 회원 관리', href: '/admin/member-delete' },
   ];
 
   // 인증을 확인하는 동안에는 빈 화면(또는 로딩)을 띄워 깜빡임 방지
