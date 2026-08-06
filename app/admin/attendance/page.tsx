@@ -4,6 +4,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import { supabase } from '../../../lib/supabase';
 import CustomPopup, { PopupState } from '../../components/CustomPopup';
 
+// 정모 데이터 구조 인터페이스
 interface Gathering {
   id: string;
   gathering_date: string;
@@ -13,16 +14,20 @@ interface Gathering {
 }
 
 export default function GatheringManagementPage() {
-  const [gatheringList, setGatheringList] = useState<Gathering[]>([]);
-  const [selectedGathering, setSelectedGathering] = useState<Gathering | null>(null);
-  const [gatheringAttendees, setGatheringAttendees] = useState<any[]>([]);
-  const [allDbMembers, setAllDbMembers] = useState<any[]>([]); // DB 전체 회원 목록
+  
+  // 기본 데이터 상태
+  const [gatheringList, setGatheringList] = useState<Gathering[]>([]);                // 전체 정모 목록
+  const [selectedGathering, setSelectedGathering] = useState<Gathering | null>(null); // 명단 확인용으로 선택된 정모
+  const [gatheringAttendees, setGatheringAttendees] = useState<any[]>([]);            // 선택된 정모의 원본 참석자 명단
+  const [allDbMembers, setAllDbMembers] = useState<any[]>([]);                        // 명단 수정 시 추가할 수 있는 DB의 전체 회원 목록
 
+  // 오늘 날짜를 'YYYY-MM-DD' 형식으로 반환하는 함수
   const todayStr = () => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   };
 
+  // 신규 정모 등록 폼 상태
   const [gatheringDate, setGatheringDate] = useState(todayStr());
   const [location, setLocation] = useState('');
   const [startTime, setStartTime] = useState('');
@@ -44,6 +49,7 @@ export default function GatheringManagementPage() {
   const [attendanceSearchTerm, setAttendanceSearchTerm] = useState('');
   const [editAttendees, setEditAttendees] = useState<any[]>([]); // 임시 저장용 장바구니
 
+  // 공통 팝업 (Alert, Confirm) 상태
   const [popup, setPopup] = useState<PopupState>({
     isOpen: false,
     type: 'alert',
@@ -52,45 +58,56 @@ export default function GatheringManagementPage() {
     onConfirm: () => {},
   });
 
+  // 팝업 열기/닫기 함수
   const showPopup = (type: 'alert' | 'confirm', title: string, message: string, onConfirm: () => void = closePopup) => {
     setPopup({ isOpen: true, type, title, message, onConfirm });
   };
   const closePopup = () => setPopup(prev => ({ ...prev, isOpen: false }));
 
+  // 컴포넌트 최초 마운트 시 정모 목록과 전체 회원 목록을 불러옴
   useEffect(() => {
     fetchGatherings();
     fetchAllMembers(); 
   }, []);
 
+  // 검색어나 페이지당 항목 수가 바뀌면 1페이지로 reset
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, itemsPerPage]);
 
+  // 정모 전체 목록 불러오기 (최신 날짜로 정렬)
   const fetchGatherings = async () => {
     const { data } = await supabase.from('gatherings').select('*').order('gathering_date', { ascending: false });
     if (data) setGatheringList(data);
   };
 
+  // 비활성화되지 않은 전체 회원 목록 불러오기 (명단 검색용)
   const fetchAllMembers = async () => {
     const { data } = await supabase.from('members').select('id, name, age, gender, grade, role, created_at').eq('del_type', 'N');
     if (data) setAllDbMembers(data);
   };
 
+  // 정모 등록 함수
   const handleCreateGathering = async (e: FormEvent) => {
     e.preventDefault();
+
+    // 필수값 입력 확인
     if (!gatheringDate || !location.trim() || !startTime.trim()) {
       return showPopup('alert', '입력 오류', '정모 일자, 장소, 시간을 모두 입력해주세요.');
     }
 
+    // 미래 날짜 제한
     if (gatheringDate > todayStr()) {
       return showPopup('alert', '등록 불가', '오늘 이후의 일자로는 정모를 등록할 수 없습니다.');
     }
 
+    // 중복 날짜 제한
     const isAlreadyExists = gatheringList.some(g => g.gathering_date === gatheringDate);
     if (isAlreadyExists) {
       return showPopup('alert', '등록 불가', `선택하신 날짜(${gatheringDate})에 이미 등록된 정모 일정이 있습니다.`);
     }
 
+    // DB INSERT
     const { error } = await supabase.from('gatherings').insert([{
       gathering_date: gatheringDate,
       location: location.trim(),
@@ -102,6 +119,8 @@ export default function GatheringManagementPage() {
       showPopup('alert', '오류', '정모 등록 중 오류가 발생했습니다.');
     } else {
       showPopup('alert', '등록 완료', '새로운 정모 일정이 등록되었습니다.');
+      
+      // 폼 초기화 및 목록 갱신
       setGatheringDate(todayStr());
       setLocation('');
       setStartTime('');
@@ -110,6 +129,7 @@ export default function GatheringManagementPage() {
     }
   };
 
+  // 정모 정보 수정 모달 띄우기 (기존 값 셋팅)
   const handleEditClick = (gathering: Gathering) => {
     setEditingGathering(gathering);
     setEditLocation(gathering.location);
@@ -117,6 +137,7 @@ export default function GatheringManagementPage() {
     setEditMemo(gathering.memo || '');
   };
 
+  // 정모 정보 수정사항 DB 저장
   const handleUpdateGathering = async (e: FormEvent) => {
     e.preventDefault();
     if (!editingGathering) return;
@@ -143,13 +164,14 @@ export default function GatheringManagementPage() {
     }
   };
 
+  // 정모 및 연관 출석 데이터 삭제 (외래키 제약조건 고려하여 자식 테이블부터 삭제)
   const handleDeleteGathering = (e: React.MouseEvent, id: string, dateStr: string) => {
     e.stopPropagation();
     showPopup('confirm', '정모 삭제', `${formatDateString(dateStr)} 정모 일정을 삭제하시겠습니까?\n(해당 일자의 정회원 및 게스트 출석 기록도 함께 모두 삭제됩니다.)`, async () => {
       closePopup();
-      await supabase.from('attendances').delete().eq('gathering_id', id);
-      await supabase.from('guest_attendances').delete().eq('gathering_id', id);
-      const { error } = await supabase.from('gatherings').delete().eq('id', id);
+      await supabase.from('attendances').delete().eq('gathering_id', id);         // 정회원 출석 기록 삭제
+      await supabase.from('guest_attendances').delete().eq('gathering_id', id);   // 게스트 출석 기록 삭제
+      const { error } = await supabase.from('gatherings').delete().eq('id', id);  // 정모 기록 본체 삭제
       
       if (error) {
         showPopup('alert', '오류', '정모 삭제 중 오류가 발생했습니다.');
@@ -161,7 +183,7 @@ export default function GatheringManagementPage() {
     });
   };
 
-  // 명단 데이터를 불러오기만 하고 상태에 저장 (정렬은 렌더링 시점에 수행)
+  // 특정 정모의 명단 팝업 열기 (회원/게스트 데이터를 묶어서 원본 배열 셋팅)
   const handleSelectGathering = async (gathering: Gathering) => {
     setSelectedGathering(gathering);
     setIsEditingAttendance(false); 
@@ -170,6 +192,7 @@ export default function GatheringManagementPage() {
 
     let allAttendees: any[] = [];
 
+    // 회원 명단 조회
     const { data: memberData } = await supabase
       .from('attendances')
       .select('id, members(id, name, age, gender, grade, role, created_at)')
@@ -187,6 +210,7 @@ export default function GatheringManagementPage() {
       allAttendees = [...allAttendees, ...regulars];
     }
 
+    // 게스트 명단 조회
     const { data: guestData } = await supabase
       .from('guest_attendances')
       .select('*')
@@ -202,15 +226,15 @@ export default function GatheringManagementPage() {
       allAttendees = [...allAttendees, ...guests];
     }
 
-    setGatheringAttendees(allAttendees);
+    setGatheringAttendees(allAttendees);  // 원본 상태 저장 (취소 시 되돌아가기 위함)
   };
 
-  // [임시 저장소] 로컬 명단에서 삭제 (빠른 UI 반영)
+  // 장바구니에서 특정 인원 제거 (DB 전송 X, 화면에서만 제거)
   const handleDeleteAttendeeLocal = (attendanceId: string) => {
     setEditAttendees(prev => prev.filter(a => a.attendance_id !== attendanceId));
   };
 
-  // [임시 저장소] 로컬 명단에 추가 (빠른 UI 반영)
+  // 장바구니에 있는 새 인원 추가 (DB 전송 X, 화면에 즉시 표시)
   const handleAddAttendeeLocal = (member: any) => {
     setEditAttendees(prev => [...prev, {
       ...member,
@@ -231,13 +255,13 @@ export default function GatheringManagementPage() {
     const addedMembers = editAttendees.filter(a => a.is_new);
 
     try {
-      // 1. 삭제된 인원 DB 반영
+      // 삭제된 인원 DB 반영
       for (const del of deletedOriginals) {
         const tableName = del.is_guest ? 'guest_attendances' : 'attendances';
         await supabase.from(tableName).delete().eq('id', del.attendance_id);
       }
 
-      // 2. 새로 추가된 인원 DB 반영 (Bulk Insert)
+      // 새로 추가된 인원 DB 반영 (Bulk Insert)
       if (addedMembers.length > 0) {
         const inserts = addedMembers.map(m => ({
           gathering_id: selectedGathering.id,
@@ -257,6 +281,7 @@ export default function GatheringManagementPage() {
     }
   };
 
+  // 날짜 문자열 포맷 YY.MM.DD (요일)
   const formatDateString = (dateStr: string) => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
@@ -264,6 +289,7 @@ export default function GatheringManagementPage() {
     return `${String(date.getFullYear()).substring(2)}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')} (${days[date.getDay()]})`;
   };
 
+  // 검색어에 따른 정모 필터링
   const filteredGatherings = gatheringList.filter(g => {
     const term = searchTerm.toLowerCase();
     return (
@@ -273,6 +299,7 @@ export default function GatheringManagementPage() {
     );
   });
 
+  // 페이징 처리 계산
   const totalPages = Math.ceil(filteredGatherings.length / itemsPerPage) || 1;
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentGatherings = filteredGatherings.slice(startIndex, startIndex + itemsPerPage);
@@ -283,7 +310,7 @@ export default function GatheringManagementPage() {
     }
   };
 
-  // 화면에 보여줄 명단 (수정 중이면 로컬 임시명단, 아니면 원본)
+  // 화면에 보여줄 명단 (수정 중이면 장바구니, 아니면 원본)
   const displayAttendees = isEditingAttendance ? editAttendees : gatheringAttendees;
 
   // 렌더링 직전에 역할순, 이름순으로 깔끔하게 정렬
@@ -293,24 +320,31 @@ export default function GatheringManagementPage() {
       if (role === '운영진') return 2;
       return 3; 
     };
+
+    // 1순위: 권한순 (모임장, 운영진, 일반)
     const rankA = getRoleRank(a.role);
     const rankB = getRoleRank(b.role);
     if (rankA !== rankB) return rankA - rankB;
+
+    // 2순위: 가입일순 (오름차순)
     const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
     const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
     return dateA - dateB;
   });
 
+  // 화면 출력 전 명단 정렬 로직 (게스트 - 이름 가나다순)
   const guests = displayAttendees.filter(m => m.is_guest).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="p-6 w-full flex-1 overflow-y-auto min-h-screen">
+      {/* 페이지 헤더 */}
       <div className="mb-6">
         <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">정모 정보 및 일정 관리</h1>
         <p className="text-sm text-slate-500 mt-1">정모 일자별 장소와 시간을 관리하고, 각 정모에 참여한 참석 인원을 확인하세요.</p>
       </div>
 
       <div className="space-y-8">
+        {/* 신규 등록 폼 섹션 */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <h2 className="text-lg font-bold text-slate-700 mb-4">신규 정모 일정 등록</h2>
           <form onSubmit={handleCreateGathering} className="flex flex-col md:flex-row gap-4 w-full">
@@ -364,6 +398,7 @@ export default function GatheringManagementPage() {
           </form>
         </div>
 
+        {/* 정모 목록 및 필터 컨트롤 섹션 */}
         <div>
           <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
             <div className="flex items-center gap-4">
@@ -374,6 +409,7 @@ export default function GatheringManagementPage() {
             </div>
             
             <div className="flex flex-col md:flex-row items-center gap-2 w-full md:w-auto">
+              {/* 검색 바 */}
               <div className="relative w-full md:w-48 lg:w-56">
                 <input 
                   type="text" 
@@ -387,6 +423,7 @@ export default function GatheringManagementPage() {
                 </svg>
               </div>
 
+              {/* 페이지당 표시 개수 */}
               <select 
                 value={itemsPerPage} 
                 onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
@@ -399,6 +436,7 @@ export default function GatheringManagementPage() {
             </div>
           </div>
 
+          {/* 정모 리스트 테이블 */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left whitespace-nowrap">
@@ -454,6 +492,7 @@ export default function GatheringManagementPage() {
             </div>
           </div>
           
+          {/* 페이징 네비게이션 */}
           {totalPages > 1 && (
             <div className="flex justify-center items-center gap-2 mt-6">
               <button 
@@ -492,6 +531,7 @@ export default function GatheringManagementPage() {
         </div>
       </div>
 
+      {/* 정모 정보 수정 모달 */}
       {editingGathering && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-up flex flex-col">
@@ -566,7 +606,7 @@ export default function GatheringManagementPage() {
         </div>
       )}
 
-      {/* 명단 팝업 창 */}
+      {/* 명단 확인 팝업 창 */}
       {selectedGathering && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-scale-up flex flex-col max-h-[85vh]">
@@ -649,8 +689,10 @@ export default function GatheringManagementPage() {
               </div>
             )}
 
+            {/* 참석자 명단 리스트 출력부 */}
             <div className="p-6 overflow-y-auto flex-1 divide-y divide-slate-100">
               
+              {/* 회원 리스트 */}
               {regulars.map((member: any, idx: number) => (
                 <div key={`regular-${idx}`} className="py-3 flex justify-between items-center px-1">
                   <div className="flex items-center gap-3">
@@ -674,7 +716,7 @@ export default function GatheringManagementPage() {
                     <span className={`text-xs font-bold px-2 py-0.5 rounded ${member.gender === '남' ? 'text-blue-700 bg-blue-100' : 'text-yellow-800 bg-yellow-100'}`}>{member.gender}</span>
                     <span className="font-bold text-slate-700">{member.grade}조</span>
                     
-                    {/* 팝업 없이 즉시 로컬 삭제 */}
+                    {/* 편집 모드일 때만 장바구니 삭제 버튼 노출 */}
                     {isEditingAttendance && (
                       <button
                         onClick={() => handleDeleteAttendeeLocal(member.attendance_id)}
@@ -687,6 +729,7 @@ export default function GatheringManagementPage() {
                 </div>
               ))}
 
+              {/* 게스트 리스트 */}
               {guests.map((member: any, idx: number) => (
                 <div key={`guest-${idx}`} className="py-3 flex justify-between items-center px-1">
                   <div className="flex items-center gap-3">
@@ -702,7 +745,7 @@ export default function GatheringManagementPage() {
                     <span className={`text-xs font-bold px-2 py-0.5 rounded ${member.gender === '남' ? 'text-blue-700 bg-blue-100' : 'text-yellow-800 bg-yellow-100'}`}>{member.gender}</span>
                     <span className="font-bold text-slate-700">{member.grade}조</span>
 
-                    {/* 팝업 없이 즉시 로컬 삭제 */}
+                    {/* 편집 모드일 때만 장바구니 삭제 버튼 노출 */}
                     {isEditingAttendance && (
                       <button
                         onClick={() => handleDeleteAttendeeLocal(member.attendance_id)}
@@ -715,15 +758,13 @@ export default function GatheringManagementPage() {
                 </div>
               ))}
 
+              {/* 출석 인원이 0명일 때 출력 메시지 */}
               {displayAttendees.length === 0 && (
                 <div className="text-center py-10 text-slate-400 font-medium">
                   이 날짜에 출석 체크된 인원이 없습니다.
                 </div>
               )}
-
             </div>
-            
-            {/* 하단 버튼 제거 - 상단 헤더로 통합됨 */}
           </div>
         </div>
       )}
