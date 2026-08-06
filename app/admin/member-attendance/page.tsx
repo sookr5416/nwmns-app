@@ -31,6 +31,10 @@ interface ProcessedMember extends Member {
   attendedDates: string[];
 }
 
+// 정렬을 위한 타입 
+type SortField = 'name' | 'age' | 'gender' | 'grade' | 'created_at' | 'monthlyCount';
+type SortOrder = 'asc' | 'desc' | null;
+
 export default function MonthlyMemberAttendancePage() {
 
   // 원본 데이터 상태
@@ -46,9 +50,13 @@ export default function MonthlyMemberAttendancePage() {
   const [showWarningOnly, setShowWarningOnly] = useState<boolean>(false); // 2회 이하 출석자만 보기 여부
   const [searchTerm, setSearchTerm] = useState<string>('');               // 이름 검색
 
+  // 정렬 상태
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortOrder, setSortOrder] = useState<SortOrder>(null);
+
   // 페이징 처리 상태
   const [currentPage, setCurrentPage] = useState<number>(1);    // 현재 페이지 번호
-  const [itemsPerPage, setItemsPerPage] = useState<number>(20); // 한 페이지당 보여줄 목로 개수
+  const [itemsPerPage, setItemsPerPage] = useState<number>(20); // 한 페이지당 보여줄 목록 개수
 
   // 모달(팝업) 상태
   const [selectedMemberModal, setSelectedMemberModal] = useState<ProcessedMember | null>(null);
@@ -119,6 +127,20 @@ export default function MonthlyMemberAttendancePage() {
     return days[date.getDay()];
   };
 
+  // 정렬 함수
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortOrder === 'asc') setSortOrder('desc');
+      else if (sortOrder === 'desc') {
+        setSortField(null);
+        setSortOrder(null);
+      }
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
   // 개인별 출석 통계 계산
   const processedMembers = useMemo<ProcessedMember[]>(() => {
     return members.map(member => {
@@ -158,10 +180,25 @@ export default function MonthlyMemberAttendancePage() {
       result = result.filter(m => m.monthlyCount <= 2);
     }
 
-    // 목록 정렬
+    // 목록 정렬 로직 (클릭한 헤더에 맞춰 정렬)
     result.sort((a, b) => {
+      if (sortField && sortOrder) {
+        let valA: any = '';
+        let valB: any = '';
 
-      // 직책에 따른 우선순위 부여
+        if (sortField === 'name') { valA = a.name; valB = b.name; }
+        else if (sortField === 'age') { valA = a.age; valB = b.age; }
+        else if (sortField === 'gender') { valA = a.gender; valB = b.gender; }
+        else if (sortField === 'grade') { valA = a.grade; valB = b.grade; }
+        else if (sortField === 'created_at') { valA = new Date(a.created_at).getTime(); valB = new Date(b.created_at).getTime(); }
+        else if (sortField === 'monthlyCount') { valA = a.monthlyCount; valB = b.monthlyCount; }
+
+        if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+        if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+        return 0;
+      }
+
+      // 기본 정렬: 직책 및 가입일자 순
       const getRoleRank = (role: string) => {
         if (role === '모임장') return 1;
         if (role === '운영진') return 2;
@@ -184,7 +221,7 @@ export default function MonthlyMemberAttendancePage() {
     });
 
     return result;
-  }, [processedMembers, searchTerm, showWarningOnly]);
+  }, [processedMembers, searchTerm, showWarningOnly, sortField, sortOrder]);            // 정렬 상태 의존성 배열 추가
 
   const totalPages = Math.ceil(filteredMembers.length / itemsPerPage) || 1;             // 전체 페이지 수
   const startIndex = (currentPage - 1) * itemsPerPage;                                  // 현재 페이지에서 보여줄 배열 시작 인덱스
@@ -266,15 +303,28 @@ export default function MonthlyMemberAttendancePage() {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-center whitespace-nowrap">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm select-none">
+              {/* 헤더 클릭 이벤트 및 정렬 아이콘(▲/▼) 적용 */}
               <tr>
                 <th className="px-6 py-4 font-bold w-16">No</th>
-                <th className="px-6 py-4 font-bold text-left">이름</th>
-                <th className="px-6 py-4 font-bold">생년월일</th>
-                <th className="px-6 py-4 font-bold">성별</th>
-                <th className="px-6 py-4 font-bold">조(급수)</th>
-                <th className="px-6 py-4 font-bold">가입일자</th>
-                <th className="px-6 py-4 font-bold">월 참석 횟수</th>
+                <th onClick={() => handleSort('name')} className="px-6 py-4 font-bold text-left cursor-pointer hover:text-indigo-600 transition-colors">
+                  이름 {sortField === 'name' && (sortOrder === 'asc' ? '▲' : '▼')}
+                </th>
+                <th onClick={() => handleSort('age')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+                  생년월일 {sortField === 'age' && (sortOrder === 'asc' ? '▲' : '▼')}
+                </th>
+                <th onClick={() => handleSort('gender')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+                  성별 {sortField === 'gender' && (sortOrder === 'asc' ? '▲' : '▼')}
+                </th>
+                <th onClick={() => handleSort('grade')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+                  조(급수) {sortField === 'grade' && (sortOrder === 'asc' ? '▲' : '▼')}
+                </th>
+                <th onClick={() => handleSort('created_at')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+                  가입일자 {sortField === 'created_at' && (sortOrder === 'asc' ? '▲' : '▼')}
+                </th>
+                <th onClick={() => handleSort('monthlyCount')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+                  월 참석 횟수 {sortField === 'monthlyCount' && (sortOrder === 'asc' ? '▲' : '▼')}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -425,7 +475,6 @@ export default function MonthlyMemberAttendancePage() {
                 </div>
               )}
             </div>
-            {/* ✅ 하단 닫기 버튼 영역 완전히 제거됨 */}
           </div>
         </div>
       )}

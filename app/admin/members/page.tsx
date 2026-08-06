@@ -98,28 +98,82 @@ export default function MemberManagementPage() {
     return data && data.length > 0;
   };
 
+  // 회원 등록 함수
   const handleRegisterMember = async (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !age || !joinDate) return showPopup('alert', '입력 오류', '이름, 생년월일, 가입일자를 모두 입력해주세요.');
 
-    const customCreatedAt = `${joinDate}T00:00:00.000Z`;
     const cleanAge = age.replace(/-/g, ''); 
-    const newMember = { name, age: cleanAge, gender, grade, role: '일반', created_at: customCreatedAt }; 
+    const customCreatedAt = `${joinDate}T00:00:00.000Z`;
+    
+    // 탈퇴자 명단에 동일 인물 여부 확인
+    const { data: existingData, error: searchError } = await supabase
+      .from('members')
+      .select('id, del_type')
+      .eq('name', name.trim())
+      .eq('age', cleanAge)
+      .eq('gender', gender);
+    
+    if (searchError) return showPopup('alert', '오류', '회원 중복 조회 중 오류가 발생했습니다.');
+
+    // 동일 인물이 존재하는 경우
+    if (existingData && existingData.length > 0) {
+      const activeMember = existingData.find(m => m.del_type === 'N' || !m.del_type);
+      const deleteMember = existingData.find(m => m.del_type === 'Y');
+
+      // 이미 활동 중인 회원의 경우 가입 차단
+      if (activeMember) {
+        return showPopup('alert', '등록 불가', '이미 활동 중인 동일한 회원(이름, 생년월일, 성별 일치)이 존재합니다.');
+      }
+
+      // 탈퇴한 이력이 있는 회원의 경우
+      if (deleteMember) {
+        return showPopup('confirm', '탈퇴 회원 복구', '과거 탈퇴(비활성화) 이력이 있는 회원입니다.\n기존 출석 기록을 유지하며 계정을 복구하시겠습니까?', async () => {
+          closePopup();
+
+          // 복구 처리: del_type을 'N'으로 변경, 새로 입력한 급수와 가입일(복구일)로 업데이트
+          const { error: restoreError } = await supabase
+            .from('members')
+            .update({
+              del_type: 'N',
+              del_reason: null,
+              created_at: customCreatedAt
+            })
+            .eq('id', deleteMember.id);
+
+          if (restoreError) {
+            showPopup('alert', '오류', '회원 복구 중 오류가 발생했습니다.');
+          } else {
+            showPopup('alert', '복구 완료', '기존 회원 정보 및 출석 기록이 성공적으로 복구되었습니다.');
+            resetForm();
+            fetchMembers();
+          }
+        });
+      }
+      return;
+    }
+
+    //  동일 인물이 없는 경우
+    const newMember = { name: name.trim(), age: cleanAge, gender, grade, role: '일반', created_at: customCreatedAt}; 
     
     const { error } = await supabase.from('members').insert([newMember]);
     if (error) {
       showPopup('alert', '오류', '회원 등록 중 오류가 발생했습니다.');
     } else {
-      const now = new Date();
+      showPopup('alert', '등록 완료', '성공적으로 등록되었습니다.');
+      resetForm();
+      fetchMembers(); 
+    }
+  };
+
+  const resetForm = () => {
+    const now = new Date();
       const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
       setName(''); 
       setAge('2000-01-01'); 
       setGrade('F');
       setJoinDate(today); 
-      showPopup('alert', '등록 완료', '성공적으로 등록되었습니다.');
-      fetchMembers(); 
-    }
   };
 
   const handleBatchAttend = async () => {
