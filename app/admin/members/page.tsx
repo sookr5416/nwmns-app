@@ -27,15 +27,29 @@ type SortOrder = 'asc' | 'desc' | null;
 
 export default function MemberManagementPage() {
   const [members, setMembers] = useState<Member[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   
+  // 다중 검색 조건 입력 상태
+  const [searchName, setSearchName] = useState('');
+  const [searchBirthMonth, setSearchBirthMonth] = useState(''); 
+  const [searchGender, setSearchGender] = useState('all');
+  const [searchGrade, setSearchGrade] = useState('all');
+  const [searchJoinMonth, setSearchJoinMonth] = useState('');   
+
+  // '조회' 버튼을 눌렀을 때만 실제 적용되는 검색 상태
+  const [appliedSearchName, setAppliedSearchName] = useState('');
+  const [appliedSearchBirthMonth, setAppliedSearchBirthMonth] = useState('');
+  const [appliedSearchGender, setAppliedSearchGender] = useState('all');
+  const [appliedSearchGrade, setAppliedSearchGrade] = useState('all');
+  const [appliedSearchJoinMonth, setAppliedSearchJoinMonth] = useState('');
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(20);
 
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
   
+  // 신규 등록 폼 상태
   const [name, setName] = useState('');
   const [age, setAge] = useState('2000-01-01'); 
   const [gender, setGender] = useState('남');
@@ -45,7 +59,8 @@ export default function MemberManagementPage() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   });
 
-  // 삭제(탈퇴) 사유 입력 모달 상태 추가
+  // 모달 상태 관리
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleteReason, setDeleteReason] = useState('');
@@ -66,10 +81,6 @@ export default function MemberManagementPage() {
   useEffect(() => {
     fetchMembers();
   }, []);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
 
   const fetchMembers = async () => {
     const { data, error } = await supabase
@@ -98,6 +109,19 @@ export default function MemberManagementPage() {
     return data && data.length > 0;
   };
 
+  // 조회 버튼 클릭 시 검색 조건 적용
+  const handleSearch = () => {
+    setAppliedSearchName(searchName);
+    setAppliedSearchBirthMonth(searchBirthMonth);
+    setAppliedSearchGender(searchGender);
+    setAppliedSearchGrade(searchGrade);
+    setAppliedSearchJoinMonth(searchJoinMonth);
+    setCurrentPage(1);
+  };
+
+  // 검색 필터 적용 중인지 확인
+  const hasActiveFilter = appliedSearchName || appliedSearchBirthMonth || appliedSearchGender !== 'all' || appliedSearchGrade !== 'all' || appliedSearchJoinMonth;
+
   // 회원 등록 함수
   const handleRegisterMember = async (e: FormEvent) => {
     e.preventDefault();
@@ -106,7 +130,6 @@ export default function MemberManagementPage() {
     const cleanAge = age.replace(/-/g, ''); 
     const customCreatedAt = `${joinDate}T00:00:00.000Z`;
     
-    // 탈퇴자 명단에 동일 인물 여부 확인
     const { data: existingData, error: searchError } = await supabase
       .from('members')
       .select('id, del_type')
@@ -116,22 +139,18 @@ export default function MemberManagementPage() {
     
     if (searchError) return showPopup('alert', '오류', '회원 중복 조회 중 오류가 발생했습니다.');
 
-    // 동일 인물이 존재하는 경우
     if (existingData && existingData.length > 0) {
       const activeMember = existingData.find(m => m.del_type === 'N' || !m.del_type);
       const deleteMember = existingData.find(m => m.del_type === 'Y');
 
-      // 이미 활동 중인 회원의 경우 가입 차단
       if (activeMember) {
         return showPopup('alert', '등록 불가', '이미 활동 중인 동일한 회원(이름, 생년월일, 성별 일치)이 존재합니다.');
       }
 
-      // 탈퇴한 이력이 있는 회원의 경우
       if (deleteMember) {
         return showPopup('confirm', '탈퇴 회원 복구', '과거 탈퇴(비활성화) 이력이 있는 회원입니다.\n기존 출석 기록을 유지하며 계정을 복구하시겠습니까?', async () => {
           closePopup();
 
-          // 복구 처리: del_type을 'N'으로 변경, 새로 입력한 급수와 가입일(복구일)로 업데이트
           const { error: restoreError } = await supabase
             .from('members')
             .update({
@@ -146,6 +165,7 @@ export default function MemberManagementPage() {
           } else {
             showPopup('alert', '복구 완료', '기존 회원 정보 및 출석 기록이 성공적으로 복구되었습니다.');
             resetForm();
+            setIsRegisterModalOpen(false);
             fetchMembers();
           }
         });
@@ -153,7 +173,6 @@ export default function MemberManagementPage() {
       return;
     }
 
-    //  동일 인물이 없는 경우
     const newMember = { name: name.trim(), age: cleanAge, gender, grade, role: '일반', created_at: customCreatedAt}; 
     
     const { error } = await supabase.from('members').insert([newMember]);
@@ -162,18 +181,18 @@ export default function MemberManagementPage() {
     } else {
       showPopup('alert', '등록 완료', '성공적으로 등록되었습니다.');
       resetForm();
+      setIsRegisterModalOpen(false); 
       fetchMembers(); 
     }
   };
 
   const resetForm = () => {
     const now = new Date();
-      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-
-      setName(''); 
-      setAge('2000-01-01'); 
-      setGrade('F');
-      setJoinDate(today); 
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    setName(''); 
+    setAge('2000-01-01'); 
+    setGrade('F');
+    setJoinDate(today); 
   };
 
   const handleBatchAttend = async () => {
@@ -234,19 +253,16 @@ export default function MemberManagementPage() {
     });
   };
 
-  // 삭제 버튼 클릭 시 모달창 열기
   const handleDeleteMemberClick = (id: string, memberName: string) => {
     setMemberToDelete({ id, name: memberName });
-    setDeleteReason(''); // 열 때마다 사유 입력칸 초기화
+    setDeleteReason(''); 
     setIsDeleteModalOpen(true);
   };
 
-  // 모달창에서 '삭제하기' 버튼 클릭 시 실제 DB 처리 로직
   const executeDelete = async () => {
     if (!memberToDelete) return;
     const { id, name } = memberToDelete;
 
-    // 해당 회원의 출석 기록이 있는지 확인
     const { data: attendanceData, error: attendanceError } = await supabase
       .from('attendances')
       .select('id')
@@ -261,7 +277,6 @@ export default function MemberManagementPage() {
     const hasAttendance = attendanceData && attendanceData.length > 0;
 
     if (hasAttendance) {
-      // 출석 기록이 있는 경우, del_type = 'Y' 및 del_reason 업데이트
       const { error: updateError } = await supabase
         .from('members')
         .update({ del_type: 'Y', del_reason: deleteReason })
@@ -272,7 +287,6 @@ export default function MemberManagementPage() {
         return showPopup('alert', '오류', '회원 비활성화 처리 중 오류가 발생했습니다.');
       }
     } else {
-      // 출석 기록이 없는 경우, 실제로 DB에서 영구 삭제
       const { error: deleteError } = await supabase
         .from('members')
         .delete()
@@ -284,7 +298,6 @@ export default function MemberManagementPage() {
       }
     }
 
-    // UI 화면에서 즉시 제거 및 모달 닫기
     setMembers(members.filter(m => m.id !== id));
     setSelectedMemberIds(selectedMemberIds.filter(selId => selId !== id)); 
     setIsDeleteModalOpen(false);
@@ -366,7 +379,25 @@ export default function MemberManagementPage() {
     }
   };
 
-  const filteredMembers = members.filter(member => member.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  // 다중 조건 필터링 적용
+  const filteredMembers = members.filter(member => {
+    if (appliedSearchName && !member.name.toLowerCase().includes(appliedSearchName.toLowerCase())) return false;
+    
+    if (appliedSearchGender !== 'all' && member.gender !== appliedSearchGender) return false;
+    
+    if (appliedSearchGrade !== 'all' && member.grade !== appliedSearchGrade) return false;
+    
+    if (appliedSearchBirthMonth) {
+      const cleanMonth = appliedSearchBirthMonth.replace(/-/g, ''); // 'YYYY-MM' -> 'YYYYMM'
+      if (!member.age.startsWith(cleanMonth)) return false;
+    }
+
+    if (appliedSearchJoinMonth) {
+      if (!member.created_at.startsWith(appliedSearchJoinMonth)) return false;
+    }
+
+    return true;
+  });
 
   const sortedMembers = [...filteredMembers].sort((a, b) => {
     const roleWeight: Record<string, number> = { '모임장': 1, '운영진': 2, '일반': 3 };
@@ -403,61 +434,106 @@ export default function MemberManagementPage() {
 
   return (
     <div className="p-6 w-full flex-1 overflow-y-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">회원 명단 및 출석 관리</h1>
-        <p className="text-sm text-slate-500 mt-1">회원을 등록하고, 매 모임마다 출석을 체크해 통계를 확인하세요.</p>
+      
+      {/* 타이틀 및 상단 공통 버튼 영역 */}
+      <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">회원 명단 및 출석 관리</h1>
+          <p className="text-sm text-slate-500 mt-1">회원을 검색하고, 매 모임마다 출석을 체크해 통계를 확인하세요.</p>
+        </div>
+        
+        {/* 검색 영역 바깥(우측 상단)으로 분리된 버튼 영역 */}
+        <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
+          <button
+            onClick={handleSearch}
+            className="flex-1 md:flex-none px-4 py-2 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800 shadow-sm transition-colors whitespace-nowrap"
+          >
+            조회
+          </button>
+          <button
+            onClick={() => setIsRegisterModalOpen(true)}
+            className="flex-1 md:flex-none px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 shadow-sm transition-colors whitespace-nowrap"
+          >
+            신규 등록
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-6">
-        <h2 className="text-lg font-bold text-slate-700 mb-4">신규 회원 등록</h2>
-        <form onSubmit={handleRegisterMember} className="flex flex-col md:flex-row gap-4 w-full">
-          
+      {/* 다중 검색 조건 영역 */}
+      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
+        <h2 className="text-sm font-bold text-slate-700 mb-4">상세 검색</h2>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 w-full">
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-500 mb-1 ml-1">이름</span>
-            <input type="text" placeholder="이름" value={name} onChange={e => setName(e.target.value)} className="w-full md:w-32 px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-          </div>
-          
-          <div className="flex flex-col">
-            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">생년월일</span>
-            <input type="date" value={age} onChange={e => setAge(e.target.value)} className="w-full md:w-40 px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-600" />
+            <input
+              type="text"
+              placeholder="이름 입력"
+              value={searchName}
+              onChange={(e) => setSearchName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+            />
           </div>
 
           <div className="flex flex-col">
-            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">가입일자</span>
-            <input type="date" value={joinDate} onChange={e => setJoinDate(e.target.value)} className="w-full md:w-40 px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-600" />
+            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">생년월</span>
+            <input
+              type="month"
+              value={searchBirthMonth}
+              onChange={(e) => setSearchBirthMonth(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+            />
           </div>
-          
+
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-500 mb-1 ml-1">성별</span>
-            <select value={gender} onChange={e => setGender(e.target.value)} className="w-full md:w-24 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select
+              value={searchGender}
+              onChange={(e) => setSearchGender(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+            >
+              <option value="all">전체</option>
               <option value="남">남</option>
               <option value="여">여</option>
             </select>
           </div>
 
           <div className="flex flex-col">
-            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">급수</span>
-            <select value={grade} onChange={e => setGrade(e.target.value)} className="w-full md:w-24 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">조(급수)</span>
+            <select
+              value={searchGrade}
+              onChange={(e) => setSearchGrade(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+            >
+              <option value="all">전체</option>
               {['A', 'B', 'C', 'D', 'E', 'F'].map(lvl => <option key={lvl} value={lvl}>{lvl}조</option>)}
             </select>
           </div>
-          
-          <div className="flex flex-col justify-end md:ml-auto">
-            <button type="submit" className="w-full md:w-auto px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors whitespace-nowrap">등록하기</button>
-          </div>
 
-        </form>
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">가입월</span>
+            <input
+              type="month"
+              value={searchJoinMonth}
+              onChange={(e) => setSearchJoinMonth(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+            />
+          </div>
+        </div>
       </div>
 
+      {/* 테이블 컨트롤 영역 */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
         <div className="flex items-center gap-4">
           <div className="text-slate-700 font-bold text-lg">
             총 회원 수 : <span className="text-indigo-600">{members.length}</span> 명
-            {searchTerm && <span className="text-sm text-slate-400 ml-2">(검색 결과: {filteredMembers.length}명)</span>}
+            {hasActiveFilter && <span className="text-sm text-slate-400 ml-2">(조회 결과: {filteredMembers.length}명)</span>}
           </div>
         </div>
         
         <div className="flex flex-col md:flex-row items-center gap-2 w-full md:w-auto">
+          {/* 정모 참석 버튼 */}
           <button 
             onClick={handleBatchAttend}
             className="w-full md:w-auto px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-lg shadow-sm transition-colors whitespace-nowrap active:scale-95"
@@ -465,23 +541,10 @@ export default function MemberManagementPage() {
             정모 참석 {selectedMemberIds.length > 0 ? `(${selectedMemberIds.length}명)` : ''}
           </button>
 
-          <div className="relative w-full md:w-64">
-            <input 
-              type="text" 
-              placeholder="이름으로 검색..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-            />
-            <svg className="w-5 h-5 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
-
           <select 
             value={itemsPerPage} 
             onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-lg font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+            className="w-full md:w-auto px-3 py-2 bg-white border border-slate-200 rounded-lg font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer text-sm"
           >
             <option value={10}>10명씩 보기</option>
             <option value={20}>20명씩 보기</option>
@@ -619,8 +682,8 @@ export default function MemberManagementPage() {
             
             {currentMembers.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-6 py-12 text-center text-slate-400 font-medium">
-                  {searchTerm ? `'${searchTerm}'(으)로 검색된 회원이 없습니다.` : '등록된 회원이 없습니다.'}
+                <td colSpan={9} className="px-6 py-16 text-center text-slate-400 font-medium">
+                  {hasActiveFilter ? '검색 조건에 맞는 회원이 없습니다.' : '등록된 회원이 없습니다.'}
                 </td>
               </tr>
             )}
@@ -661,6 +724,58 @@ export default function MemberManagementPage() {
           >
             다음
           </button>
+        </div>
+      )}
+
+      {/* 신규 회원 등록 팝업 모달 */}
+      {isRegisterModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-scale-up">
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-800">신규 회원 등록</h3>
+              <button
+                onClick={() => setIsRegisterModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-500 hover:bg-slate-100 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleRegisterMember} className="p-6 space-y-4">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-500 mb-1 ml-1">이름</span>
+                <input type="text" placeholder="이름을 입력하세요" value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-500 mb-1 ml-1">생년월일</span>
+                <input type="date" value={age} onChange={e => setAge(e.target.value)} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-600 text-sm font-medium" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-500 mb-1 ml-1">가입일자</span>
+                <input type="date" value={joinDate} onChange={e => setJoinDate(e.target.value)} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-600 text-sm font-medium" />
+              </div>
+              
+              <div className="flex gap-4">
+                <div className="flex flex-col flex-1">
+                  <span className="text-xs font-bold text-slate-500 mb-1 ml-1">성별</span>
+                  <select value={gender} onChange={e => setGender(e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium text-slate-700">
+                    <option value="남">남</option>
+                    <option value="여">여</option>
+                  </select>
+                </div>
+                <div className="flex flex-col flex-1">
+                  <span className="text-xs font-bold text-slate-500 mb-1 ml-1">급수</span>
+                  <select value={grade} onChange={e => setGrade(e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium text-slate-700">
+                    {['A', 'B', 'C', 'D', 'E', 'F'].map(lvl => <option key={lvl} value={lvl}>{lvl}조</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-4 flex gap-2 justify-end border-t border-slate-100 mt-6">
+                <button type="button" onClick={() => setIsRegisterModalOpen(false)} className="px-5 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors">취소</button>
+                <button type="submit" className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors">등록</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

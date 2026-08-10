@@ -41,14 +41,15 @@ export default function MonthlyMemberAttendancePage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [allAttendances, setAllAttendances] = useState<AttendanceRecord[]>([]);
   
-  // 조회 조건 상태
-  const [selectedMonth, setSelectedMonth] = useState<string>(
-    new Date().toISOString().slice(0, 7)
-  );
-  
-  // 필터링 조건 상태
-  const [showWarningOnly, setShowWarningOnly] = useState<boolean>(false); // 2회 이하 출석자만 보기 여부
-  const [searchTerm, setSearchTerm] = useState<string>('');               // 이름 검색
+  // 입력 중인 조회 조건 상태 (조회 버튼을 누르기 전)
+  const [inputMonth, setInputMonth] = useState<string>(new Date().toISOString().slice(0, 7));
+  const [inputName, setInputName] = useState<string>(''); 
+  const [inputWarning, setInputWarning] = useState<boolean>(false); 
+
+  // 실제로 적용된 조회 조건 상태 (조회 버튼을 누른 후)
+  const [selectedMonth, setSelectedMonth] = useState<string>(inputMonth);
+  const [searchTerm, setSearchTerm] = useState<string>(''); 
+  const [showWarningOnly, setShowWarningOnly] = useState<boolean>(false); 
 
   // 정렬 상태
   const [sortField, setSortField] = useState<SortField | null>(null);
@@ -66,13 +67,12 @@ export default function MonthlyMemberAttendancePage() {
     fetchData();
   }, [selectedMonth]);
 
-  // 검색어, 필터 조건, 페이지당 개수 등이 변경되면 항상 1페이지로 돌아감
+  // 검색어, 필터 조건, 페이지당 개수 등이 적용되면 항상 1페이지로 돌아감
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedMonth, searchTerm, showWarningOnly, itemsPerPage]);
 
   const fetchData = async () => {
-    
     // 선택된 월의 1일과 마지막 일자를 계산
     const year = parseInt(selectedMonth.split('-')[0]);
     const month = parseInt(selectedMonth.split('-')[1]);
@@ -103,6 +103,17 @@ export default function MonthlyMemberAttendancePage() {
     if (memData) setMembers(memData as Member[]);
     if (attData) setAllAttendances(attData as unknown as AttendanceRecord[]);
   };
+
+  // 조회 버튼 클릭 시 입력값을 실제 조건으로 적용
+  const handleSearch = () => {
+    setSelectedMonth(inputMonth);
+    setSearchTerm(inputName);
+    setShowWarningOnly(inputWarning);
+    setCurrentPage(1);
+  };
+
+  // 검색 필터 적용 중인지 확인 (결과 건수 표시에 사용)
+  const hasActiveFilter = searchTerm !== '' || showWarningOnly;
 
   // 생년월일 포맷 (YY.MM.DD)
   const formatDOB = (dobStr: string) => {
@@ -221,11 +232,11 @@ export default function MonthlyMemberAttendancePage() {
     });
 
     return result;
-  }, [processedMembers, searchTerm, showWarningOnly, sortField, sortOrder]);            // 정렬 상태 의존성 배열 추가
+  }, [processedMembers, searchTerm, showWarningOnly, sortField, sortOrder]);
 
-  const totalPages = Math.ceil(filteredMembers.length / itemsPerPage) || 1;             // 전체 페이지 수
-  const startIndex = (currentPage - 1) * itemsPerPage;                                  // 현재 페이지에서 보여줄 배열 시작 인덱스
-  const currentMembers = filteredMembers.slice(startIndex, startIndex + itemsPerPage);  // 현재 페이지에 랜더링될 멤버들
+  const totalPages = Math.ceil(filteredMembers.length / itemsPerPage) || 1;             
+  const startIndex = (currentPage - 1) * itemsPerPage;                                  
+  const currentMembers = filteredMembers.slice(startIndex, startIndex + itemsPerPage);  
 
   // 페이지 이동 핸들러
   const handlePageChange = (page: number) => {
@@ -236,52 +247,73 @@ export default function MonthlyMemberAttendancePage() {
 
   return (
     <div className="p-6 w-full flex-1 overflow-y-auto space-y-6 bg-slate-50 min-h-screen">
-      {/* 헤더 영역 */}
+      
+      {/* 타이틀 및 상단 공통 버튼 영역 */}
       <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">월별 회원 출석 현황</h1>
           <p className="text-sm text-slate-500 mt-1">월별 참석 횟수를 확인하고, 활동이 저조한 회원을 관리하세요.</p>
         </div>
+        
+        {/* 우측 상단 공통 액션 버튼 */}
+        <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
+          <button
+            onClick={handleSearch}
+            className="flex-1 md:flex-none px-4 py-2 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800 shadow-sm transition-colors whitespace-nowrap"
+          >
+            조회
+          </button>
+        </div>
       </div>
 
-      {/* 검색 및 필터 컨트롤 패널 */}
-      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <input 
-            type="month" 
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-700 w-full md:w-auto focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-          />
-        </div>
-
-        {/* 이름 검색 및 경고자 보기 체크박스 */}
-        <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
-          <input 
-            type="text" 
-            placeholder="이름 검색..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full sm:w-48 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-          <label className="flex items-center gap-2 cursor-pointer bg-red-50 text-red-700 px-4 py-2.5 rounded-lg border border-red-100 hover:bg-red-100 transition-colors w-full sm:w-auto justify-center font-bold text-sm">
+      {/* 다중 검색 조건 영역 */}
+      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
+        <h2 className="text-sm font-bold text-slate-700 mb-4">상세 검색</h2>
+        
+        <div className="flex flex-col sm:flex-row gap-4 w-full items-end">
+          <div className="flex flex-col w-full sm:w-auto">
+            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">조회 월</span>
             <input 
-              type="checkbox" 
-              checked={showWarningOnly}
-              onChange={(e) => setShowWarningOnly(e.target.checked)}
-              className="w-4 h-4 text-red-600 rounded border-red-300 focus:ring-red-500"
+              type="month" 
+              value={inputMonth}
+              onChange={(e) => setInputMonth(e.target.value)}
+              className="w-full sm:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all text-slate-700 font-bold"
             />
-            2회 이하 참석자만 보기
-          </label>
+          </div>
+
+          <div className="flex flex-col w-full sm:w-auto">
+            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">이름</span>
+            <input 
+              type="text" 
+              placeholder="이름 입력..." 
+              value={inputName}
+              onChange={(e) => setInputName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+              className="w-full sm:w-48 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+            />
+          </div>
+
+          {/* sm:ml-auto 를 추가하여 맨 우측으로 밀어냄 */}
+          <div className="flex flex-col w-full sm:w-auto pb-0.5 sm:ml-auto">
+            <label className="flex items-center gap-2 cursor-pointer bg-red-50 text-red-700 px-4 py-2 rounded-lg border border-red-100 hover:bg-red-100 transition-colors w-full sm:w-auto justify-center font-bold text-sm h-[38px]">
+              <input 
+                type="checkbox" 
+                checked={inputWarning}
+                onChange={(e) => setInputWarning(e.target.checked)}
+                className="w-4 h-4 text-red-600 rounded border-red-300 focus:ring-red-500 cursor-pointer"
+              />
+              2회 이하 참석자만 보기
+            </label>
+          </div>
         </div>
       </div>
 
-      {/* 리스트 요약 및 개수 선택기 */}
+      {/* 테이블 컨트롤 영역 */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
         <div className="flex items-center gap-4">
           <div className="text-slate-700 font-bold text-lg">
             총 회원 수 : <span className="text-indigo-600">{members.length}</span> 명
-            {(searchTerm || showWarningOnly) && <span className="text-sm text-slate-400 ml-2">(검색 결과: {filteredMembers.length}명)</span>}
+            {hasActiveFilter && <span className="text-sm text-slate-400 ml-2">(조회 결과: {filteredMembers.length}명)</span>}
           </div>
         </div>
         
@@ -289,7 +321,7 @@ export default function MonthlyMemberAttendancePage() {
           <select 
             value={itemsPerPage} 
             onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-lg font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+            className="w-full md:w-auto px-3 py-2 bg-white border border-slate-200 rounded-lg font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer text-sm"
           >
             <option value={10}>10명씩 보기</option>
             <option value={20}>20명씩 보기</option>
@@ -304,7 +336,6 @@ export default function MonthlyMemberAttendancePage() {
         <div className="overflow-x-auto">
           <table className="w-full text-center whitespace-nowrap">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm select-none">
-              {/* 헤더 클릭 이벤트 및 정렬 아이콘(▲/▼) 적용 */}
               <tr>
                 <th className="px-6 py-4 font-bold w-16">No</th>
                 <th onClick={() => handleSort('name')} className="px-6 py-4 font-bold text-left cursor-pointer hover:text-indigo-600 transition-colors">
@@ -433,7 +464,7 @@ export default function MonthlyMemberAttendancePage() {
           onClick={() => setSelectedMemberModal(null)}
         >
           <div 
-            className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden" 
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-up" 
             onClick={e => e.stopPropagation()}
           >
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -442,12 +473,10 @@ export default function MonthlyMemberAttendancePage() {
               </h3>
               <button 
                 onClick={() => setSelectedMemberModal(null)} 
-                className="text-slate-400 hover:text-slate-600 transition-colors"
+                className="text-slate-400 hover:text-slate-600 transition-colors w-8 h-8 rounded-full flex items-center justify-center bg-white border border-slate-200"
                 title="닫기"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                ✕
               </button>
             </div>
             

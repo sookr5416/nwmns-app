@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '../../../lib/supabase'; // 경로에 맞게 ../ 개수 조정 필요
-import CustomPopup, { PopupState } from '../../components/CustomPopup'; // 경로에 맞게 조정 필요
+import { supabase } from '../../../lib/supabase';
+import CustomPopup, { PopupState } from '../../components/CustomPopup'; 
 
 interface Attendance {
   id: string;
@@ -27,9 +27,22 @@ type SortOrder = 'asc' | 'desc' | null;
 
 export default function MemberDeletePage() {
   const [deletedMembers, setDeletedMembers] = useState<Member[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   
+  // 다중 검색 조건 입력 상태 (입력 중)
+  const [searchName, setSearchName] = useState('');
+  const [searchBirthMonth, setSearchBirthMonth] = useState(''); 
+  const [searchGender, setSearchGender] = useState('all');
+  const [searchGrade, setSearchGrade] = useState('all');
+  const [searchJoinMonth, setSearchJoinMonth] = useState('');   
+
+  // '조회' 버튼을 눌렀을 때만 실제 적용되는 검색 상태
+  const [appliedSearchName, setAppliedSearchName] = useState('');
+  const [appliedSearchBirthMonth, setAppliedSearchBirthMonth] = useState('');
+  const [appliedSearchGender, setAppliedSearchGender] = useState('all');
+  const [appliedSearchGrade, setAppliedSearchGrade] = useState('all');
+  const [appliedSearchJoinMonth, setAppliedSearchJoinMonth] = useState('');
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(20);
 
@@ -53,10 +66,6 @@ export default function MemberDeletePage() {
     fetchDeletedMembers();
   }, []);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
-
   const fetchDeletedMembers = async () => {
     // 삭제 처리된 회원(del_type = 'Y')만 조회
     const { data, error } = await supabase
@@ -67,6 +76,19 @@ export default function MemberDeletePage() {
     if (data) setDeletedMembers(data);
     if (error) console.error("데이터 로드 에러:", error);
   };
+
+  // 조회 버튼 클릭 시 검색 조건 적용
+  const handleSearch = () => {
+    setAppliedSearchName(searchName);
+    setAppliedSearchBirthMonth(searchBirthMonth);
+    setAppliedSearchGender(searchGender);
+    setAppliedSearchGrade(searchGrade);
+    setAppliedSearchJoinMonth(searchJoinMonth);
+    setCurrentPage(1);
+  };
+
+  // 검색 필터 적용 중인지 확인
+  const hasActiveFilter = appliedSearchName || appliedSearchBirthMonth || appliedSearchGender !== 'all' || appliedSearchGrade !== 'all' || appliedSearchJoinMonth;
 
   // 선택한 회원 일괄 복구
   const handleBatchRestore = async () => {
@@ -172,7 +194,25 @@ export default function MemberDeletePage() {
     }
   };
 
-  const filteredMembers = deletedMembers.filter(member => member.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  // 다중 조건 필터링 적용
+  const filteredMembers = deletedMembers.filter(member => {
+    if (appliedSearchName && !member.name.toLowerCase().includes(appliedSearchName.toLowerCase())) return false;
+    
+    if (appliedSearchGender !== 'all' && member.gender !== appliedSearchGender) return false;
+    
+    if (appliedSearchGrade !== 'all' && member.grade !== appliedSearchGrade) return false;
+    
+    if (appliedSearchBirthMonth) {
+      const cleanMonth = appliedSearchBirthMonth.replace(/-/g, ''); // 'YYYY-MM' -> 'YYYYMM'
+      if (!member.age.startsWith(cleanMonth)) return false;
+    }
+
+    if (appliedSearchJoinMonth) {
+      if (!member.created_at.startsWith(appliedSearchJoinMonth)) return false;
+    }
+
+    return true;
+  });
 
   const sortedMembers = [...filteredMembers].sort((a, b) => {
     const roleWeight: Record<string, number> = { '모임장': 1, '운영진': 2, '일반': 3 };
@@ -209,16 +249,95 @@ export default function MemberDeletePage() {
 
   return (
     <div className="p-6 w-full flex-1 overflow-y-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">탈퇴자 명단 관리</h1>
-        <p className="text-sm text-slate-500 mt-1">비활성화 처리된 탈퇴 회원을 다시 복구하거나, 데이터를 영구 삭제할 수 있습니다.</p>
+      
+      {/* 타이틀 및 상단 공통 버튼 영역 */}
+      <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">탈퇴자 명단 관리</h1>
+          <p className="text-sm text-slate-500 mt-1">비활성화 처리된 탈퇴 회원을 다시 복구하거나, 데이터를 영구 삭제할 수 있습니다.</p>
+        </div>
+        
+        {/* 우측 상단 공통 액션 버튼 */}
+        <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
+          <button
+            onClick={handleSearch}
+            className="flex-1 md:flex-none px-4 py-2 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800 shadow-sm transition-colors whitespace-nowrap"
+          >
+            조회
+          </button>
+        </div>
       </div>
 
+      {/* 다중 검색 조건 영역 */}
+      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
+        <h2 className="text-sm font-bold text-slate-700 mb-4">상세 검색</h2>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 w-full">
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">이름</span>
+            <input
+              type="text"
+              placeholder="이름 입력"
+              value={searchName}
+              onChange={(e) => setSearchName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+            />
+          </div>
+
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">생년월</span>
+            <input
+              type="month"
+              value={searchBirthMonth}
+              onChange={(e) => setSearchBirthMonth(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+            />
+          </div>
+
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">성별</span>
+            <select
+              value={searchGender}
+              onChange={(e) => setSearchGender(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+            >
+              <option value="all">전체</option>
+              <option value="남">남</option>
+              <option value="여">여</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">조(급수)</span>
+            <select
+              value={searchGrade}
+              onChange={(e) => setSearchGrade(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+            >
+              <option value="all">전체</option>
+              {['A', 'B', 'C', 'D', 'E', 'F'].map(lvl => <option key={lvl} value={lvl}>{lvl}조</option>)}
+            </select>
+          </div>
+
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">가입월</span>
+            <input
+              type="month"
+              value={searchJoinMonth}
+              onChange={(e) => setSearchJoinMonth(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 테이블 컨트롤 영역 */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
         <div className="flex items-center gap-4">
           <div className="text-slate-700 font-bold text-lg">
             총 탈퇴자 수 : <span className="text-red-500">{deletedMembers.length}</span> 명
-            {searchTerm && <span className="text-sm text-slate-400 ml-2">(검색 결과: {filteredMembers.length}명)</span>}
+            {hasActiveFilter && <span className="text-sm text-slate-400 ml-2">(조회 결과: {filteredMembers.length}명)</span>}
           </div>
         </div>
         
@@ -230,23 +349,10 @@ export default function MemberDeletePage() {
             선택 일괄 복구 {selectedMemberIds.length > 0 ? `(${selectedMemberIds.length}명)` : ''}
           </button>
 
-          <div className="relative w-full md:w-64">
-            <input 
-              type="text" 
-              placeholder="이름으로 검색..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-            />
-            <svg className="w-5 h-5 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
-
           <select 
             value={itemsPerPage} 
             onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-lg font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+            className="w-full md:w-auto px-3 py-2 bg-white border border-slate-200 rounded-lg font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer text-sm"
           >
             <option value={10}>10명씩 보기</option>
             <option value={20}>20명씩 보기</option>
@@ -356,8 +462,8 @@ export default function MemberDeletePage() {
             
             {currentMembers.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-medium">
-                  {searchTerm ? `'${searchTerm}'(으)로 검색된 탈퇴 회원이 없습니다.` : '탈퇴 처리된 회원이 없습니다.'}
+                <td colSpan={9} className="px-6 py-16 text-center text-slate-400 font-medium">
+                  {hasActiveFilter ? '검색 조건에 맞는 탈퇴 회원이 없습니다.' : '탈퇴 처리된 회원이 없습니다.'}
                 </td>
               </tr>
             )}

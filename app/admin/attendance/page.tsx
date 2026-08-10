@@ -33,11 +33,19 @@ export default function GatheringManagementPage() {
   const [startTime, setStartTime] = useState('');
   const [memo, setMemo] = useState('');
 
-  // 검색 및 페이징 상태
-  const [searchTerm, setSearchTerm] = useState('');
+  // 검색 및 페이징 상태 (입력 상태와 적용 상태 분리)
+  const [searchInput, setSearchInput] = useState(''); // 장소, 비고 텍스트 검색
+  const [searchDate, setSearchDate] = useState('');   // 날짜 검색 (YYYY-MM 또는 YYYY-MM-DD 등)
+  
+  const [appliedSearchInput, setAppliedSearchInput] = useState('');
+  const [appliedSearchDate, setAppliedSearchDate] = useState('');
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
+  // 모달 제어 상태
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  
   // 정모 수정 모달 관련 상태
   const [editingGathering, setEditingGathering] = useState<Gathering | null>(null);
   const [editLocation, setEditLocation] = useState('');
@@ -70,11 +78,6 @@ export default function GatheringManagementPage() {
     fetchAllMembers(); 
   }, []);
 
-  // 검색어나 페이지당 항목 수가 바뀌면 1페이지로 reset
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, itemsPerPage]);
-
   // 정모 전체 목록 불러오기 (최신 날짜로 정렬)
   const fetchGatherings = async () => {
     const { data } = await supabase.from('gatherings').select('*').order('gathering_date', { ascending: false });
@@ -86,6 +89,15 @@ export default function GatheringManagementPage() {
     const { data } = await supabase.from('members').select('id, name, age, gender, grade, role, created_at').eq('del_type', 'N');
     if (data) setAllDbMembers(data);
   };
+
+  // 조회 버튼 클릭 시 필터 적용
+  const handleSearch = () => {
+    setAppliedSearchInput(searchInput);
+    setAppliedSearchDate(searchDate);
+    setCurrentPage(1);
+  };
+
+  const hasActiveFilter = appliedSearchInput || appliedSearchDate;
 
   // 정모 등록 함수
   const handleCreateGathering = async (e: FormEvent) => {
@@ -125,6 +137,7 @@ export default function GatheringManagementPage() {
       setLocation('');
       setStartTime('');
       setMemo('');
+      setIsRegisterModalOpen(false); // 모달 닫기
       fetchGatherings();
     }
   };
@@ -164,12 +177,12 @@ export default function GatheringManagementPage() {
     }
   };
 
-  // 정모 및 연관 출석 데이터 삭제 (외래키 제약조건 고려하여 자식 테이블부터 삭제)
+  // 정모 및 연관 출석 데이터 삭제
   const handleDeleteGathering = (e: React.MouseEvent, id: string, dateStr: string) => {
     e.stopPropagation();
     showPopup('confirm', '정모 삭제', `${formatDateString(dateStr)} 정모 일정을 삭제하시겠습니까?\n(해당 일자의 정회원 및 게스트 출석 기록도 함께 모두 삭제됩니다.)`, async () => {
       closePopup();
-      await supabase.from('attendances').delete().eq('gathering_id', id);         // 정회원 출석 기록 삭제
+      await supabase.from('attendances').delete().eq('gathering_id', id);        // 정회원 출석 기록 삭제
       await supabase.from('guest_attendances').delete().eq('gathering_id', id);   // 게스트 출석 기록 삭제
       const { error } = await supabase.from('gatherings').delete().eq('id', id);  // 정모 기록 본체 삭제
       
@@ -289,14 +302,25 @@ export default function GatheringManagementPage() {
     return `${String(date.getFullYear()).substring(2)}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')} (${days[date.getDay()]})`;
   };
 
-  // 검색어에 따른 정모 필터링
+  // 다중 조건 필터링 적용
   const filteredGatherings = gatheringList.filter(g => {
-    const term = searchTerm.toLowerCase();
-    return (
-      g.location.toLowerCase().includes(term) ||
-      (g.memo && g.memo.toLowerCase().includes(term)) ||
-      g.gathering_date.includes(term)
-    );
+    
+    // 장소 및 비고 검색
+    if (appliedSearchInput) {
+      const term = appliedSearchInput.toLowerCase();
+      if (!g.location.toLowerCase().includes(term) && !(g.memo && g.memo.toLowerCase().includes(term))) {
+        return false;
+      }
+    }
+
+    // 날짜 검색 (YYYY-MM 형식으로 월만 검색하거나 특정일 검색 모두 커버)
+    if (appliedSearchDate) {
+      if (!g.gathering_date.startsWith(appliedSearchDate)) {
+        return false;
+      }
+    }
+
+    return true;
   });
 
   // 페이징 처리 계산
@@ -321,7 +345,7 @@ export default function GatheringManagementPage() {
       return 3; 
     };
 
-    // 1순위: 권한순 (모임장, 운영진, 일반)
+    // 1순위: 권한순
     const rankA = getRoleRank(a.role);
     const rankB = getRoleRank(b.role);
     if (rankA !== rankB) return rankA - rankB;
@@ -332,204 +356,250 @@ export default function GatheringManagementPage() {
     return dateA - dateB;
   });
 
-  // 화면 출력 전 명단 정렬 로직 (게스트 - 이름 가나다순)
   const guests = displayAttendees.filter(m => m.is_guest).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="p-6 w-full flex-1 overflow-y-auto min-h-screen">
-      {/* 페이지 헤더 */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">정모 정보 및 일정 관리</h1>
-        <p className="text-sm text-slate-500 mt-1">정모 일자별 장소와 시간을 관리하고, 각 정모에 참여한 참석 인원을 확인하세요.</p>
-      </div>
-
-      <div className="space-y-8">
-        {/* 신규 등록 폼 섹션 */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <h2 className="text-lg font-bold text-slate-700 mb-4">신규 정모 일정 등록</h2>
-          <form onSubmit={handleCreateGathering} className="flex flex-col md:flex-row gap-4 w-full">
-            <div className="flex flex-col">
-              <span className="text-xs font-bold text-slate-500 mb-1 ml-1">정모 일자</span>
-              <input 
-                type="date" 
-                max={todayStr()} 
-                value={gatheringDate} 
-                onChange={e => setGatheringDate(e.target.value)} 
-                className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 w-44 font-bold" 
-              />
-            </div>
-
-            <div className="flex flex-col flex-[1]">
-              <span className="text-xs font-bold text-slate-500 mb-1 ml-1">장소</span>
-              <input 
-                type="text" 
-                placeholder="영등포다목적배드민턴체육관" 
-                value={location} 
-                onChange={e => setLocation(e.target.value)} 
-                className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg" 
-              />
-            </div>
-
-            <div className="flex flex-col">
-              <span className="text-xs font-bold text-slate-500 mb-1 ml-1">시간</span>
-              <input 
-                type="text" 
-                placeholder="18:20 - 21:30" 
-                value={startTime} 
-                onChange={e => setStartTime(e.target.value)} 
-                className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg w-48" 
-              />
-            </div>
-
-            <div className="flex flex-col flex-[1.5]">
-              <span className="text-xs font-bold text-slate-500 mb-1 ml-1">비고</span>
-              <input 
-                type="text" 
-                placeholder="정기 정모" 
-                value={memo} 
-                onChange={e => setMemo(e.target.value)} 
-                className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg" 
-              />
-            </div>
-
-            <div className="flex flex-col justify-end">
-              <button type="submit" className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors whitespace-nowrap">정모 등록</button>
-            </div>
-          </form>
+      
+      {/* 타이틀 및 상단 공통 버튼 영역 */}
+      <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">정모 정보 및 일정 관리</h1>
+          <p className="text-sm text-slate-500 mt-1">정모 일자별 장소와 시간을 관리하고, 각 정모에 참여한 참석 인원을 확인하세요.</p>
         </div>
 
-        {/* 정모 목록 및 필터 컨트롤 섹션 */}
-        <div>
-          <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-            <div className="flex items-center gap-4">
-              <div className="text-slate-700 font-bold text-lg">
-                총 정모 수 : <span className="text-indigo-600">{gatheringList.length}</span> 건
-                {searchTerm && <span className="text-sm text-slate-400 ml-2">(검색 결과: {filteredGatherings.length}건)</span>}
-              </div>
+        {/* 우측 상단 공통 액션 버튼 */}
+        <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
+          <button
+            onClick={handleSearch}
+            className="flex-1 md:flex-none px-4 py-2 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800 shadow-sm transition-colors whitespace-nowrap"
+          >
+            조회
+          </button>
+          <button
+            onClick={() => setIsRegisterModalOpen(true)}
+            className="flex-1 md:flex-none px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg hover:bg-indigo-700 shadow-sm transition-colors whitespace-nowrap"
+          >
+            신규 등록
+          </button>
+        </div>
+      </div>
+
+      {/* 다중 검색 조건 영역 */}
+      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
+        <h2 className="text-sm font-bold text-slate-700 mb-4">상세 검색</h2>
+        
+        <div className="flex flex-col sm:flex-row gap-4 w-full items-end">
+          <div className="flex flex-col w-full sm:w-1/2 md:w-64">
+            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">장소 및 비고 검색</span>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="장소 또는 비고 입력..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+              />
+              <svg className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
             </div>
-            
-            <div className="flex flex-col md:flex-row items-center gap-2 w-full md:w-auto">
-              {/* 검색 바 */}
-              <div className="relative w-full md:w-48 lg:w-56">
+          </div>
+
+          <div className="flex flex-col w-full sm:w-1/2 md:w-48">
+            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">정모 날짜(월) 검색</span>
+            <input
+              type="month"
+              value={searchDate}
+              onChange={(e) => setSearchDate(e.target.value)}
+              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all text-slate-600"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 테이블 컨트롤 영역 */}
+      <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+        <div className="flex items-center gap-4">
+          <div className="text-slate-700 font-bold text-lg">
+            총 정모 수 : <span className="text-indigo-600">{gatheringList.length}</span> 건
+            {hasActiveFilter && <span className="text-sm text-slate-400 ml-2">(조회 결과: {filteredGatherings.length}건)</span>}
+          </div>
+        </div>
+        
+        <div className="flex flex-col md:flex-row items-center gap-2 w-full md:w-auto">
+          <select 
+            value={itemsPerPage} 
+            onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+            className="w-full md:w-auto px-3 py-2 bg-white border border-slate-200 rounded-lg font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer text-sm"
+          >
+            <option value={10}>10건씩 보기</option>
+            <option value={20}>20건씩 보기</option>
+            <option value={50}>50건씩 보기</option>
+          </select>
+        </div>
+      </div>
+
+      {/* 정모 리스트 테이블 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left whitespace-nowrap">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm">
+              <tr>
+                <th className="px-6 py-4 font-bold">정모 일자</th>
+                <th className="px-6 py-4 font-bold">장소</th>
+                <th className="px-6 py-4 font-bold">시간</th>
+                <th className="px-6 py-4 font-bold">비고</th>
+                <th className="px-6 py-4 font-bold text-right">관리</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {currentGatherings.map((g) => (
+                <tr key={g.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-6 py-4 font-bold text-slate-800">{formatDateString(g.gathering_date)}</td>
+                  <td className="px-6 py-4 font-bold text-slate-700">{g.location}</td>
+                  <td className="px-6 py-4 text-slate-600 font-medium">{g.start_time}</td>
+                  <td className="px-6 py-4 text-slate-500 text-sm">{g.memo || '-'}</td>
+                  <td className="px-6 py-4 text-right space-x-2">
+                    <button 
+                      onClick={() => handleSelectGathering(g)}
+                      className="text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      명단 확인
+                    </button>
+                    
+                    <button 
+                      onClick={() => handleEditClick(g)}
+                      className="px-2.5 py-1.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                    >
+                      수정
+                    </button>
+
+                    <button 
+                      onClick={(e) => handleDeleteGathering(e, g.id, g.gathering_date)}
+                      className="px-2.5 py-1.5 text-sm font-bold text-red-500 bg-red-50 hover:bg-red-500 hover:text-white rounded-lg transition-colors"
+                    >
+                      삭제
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {currentGatherings.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-16 text-center text-slate-400 font-medium">
+                    {hasActiveFilter ? '검색 조건에 맞는 정모가 없습니다.' : '등록된 정모 일정이 없습니다.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      {/* 페이징 네비게이션 */}
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-2 mt-6">
+          <button 
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+          >
+            이전
+          </button>
+          
+          <div className="flex gap-1">
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                className={`w-10 h-10 rounded-lg text-sm font-bold transition-colors ${
+                  currentPage === page 
+                    ? 'bg-indigo-600 text-white shadow-md' 
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {page}
+              </button>
+            ))}
+          </div>
+
+          <button 
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+          >
+            다음
+          </button>
+        </div>
+      )}
+
+      {/* 신규 정모 등록 모달 */}
+      {isRegisterModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-scale-up">
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-800">신규 정모 등록</h3>
+              <button
+                onClick={() => setIsRegisterModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-500 hover:bg-slate-100 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleCreateGathering} className="p-6 space-y-4">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-500 mb-1 ml-1">정모 일자</span>
+                <input 
+                  type="date" 
+                  max={todayStr()} 
+                  value={gatheringDate} 
+                  onChange={e => setGatheringDate(e.target.value)} 
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium text-slate-700" 
+                />
+              </div>
+
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-500 mb-1 ml-1">장소</span>
                 <input 
                   type="text" 
-                  placeholder="장소, 날짜, 비고 검색..." 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm"
+                  placeholder="예: 영등포다목적배드민턴체육관" 
+                  value={location} 
+                  onChange={e => setLocation(e.target.value)} 
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium text-slate-700" 
                 />
-                <svg className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
               </div>
 
-              {/* 페이지당 표시 개수 */}
-              <select 
-                value={itemsPerPage} 
-                onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                className="w-full md:w-auto px-3 py-2 bg-white border border-slate-200 rounded-lg font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer text-sm"
-              >
-                <option value={10}>10건씩 보기</option>
-                <option value={20}>20건씩 보기</option>
-                <option value={50}>50건씩 보기</option>
-              </select>
-            </div>
-          </div>
-
-          {/* 정모 리스트 테이블 */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left whitespace-nowrap">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm">
-                  <tr>
-                    <th className="px-6 py-4 font-bold">정모 일자</th>
-                    <th className="px-6 py-4 font-bold">장소</th>
-                    <th className="px-6 py-4 font-bold">시간</th>
-                    <th className="px-6 py-4 font-bold">비고</th>
-                    <th className="px-6 py-4 font-bold text-right">관리</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {currentGatherings.map((g) => (
-                    <tr key={g.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4 font-bold text-slate-800">{formatDateString(g.gathering_date)}</td>
-                      <td className="px-6 py-4 font-bold text-slate-700">{g.location}</td>
-                      <td className="px-6 py-4 text-slate-600 font-medium">{g.start_time}</td>
-                      <td className="px-6 py-4 text-slate-500 text-sm">{g.memo || '-'}</td>
-                      <td className="px-6 py-4 text-right space-x-2">
-                        <button 
-                          onClick={() => handleSelectGathering(g)}
-                          className="text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
-                        >
-                          명단 확인
-                        </button>
-                        
-                        <button 
-                          onClick={() => handleEditClick(g)}
-                          className="px-2.5 py-1.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-                        >
-                          수정
-                        </button>
-
-                        <button 
-                          onClick={(e) => handleDeleteGathering(e, g.id, g.gathering_date)}
-                          className="px-2.5 py-1.5 text-sm font-bold text-red-500 bg-red-50 hover:bg-red-500 hover:text-white rounded-lg transition-colors"
-                        >
-                          삭제
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {currentGatherings.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-16 text-center text-slate-400 font-medium">
-                        {searchTerm ? '검색 조건에 맞는 정모가 없습니다.' : '등록된 정모 일정이 없습니다.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          
-          {/* 페이징 네비게이션 */}
-          {totalPages > 1 && (
-            <div className="flex justify-center items-center gap-2 mt-6">
-              <button 
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-              >
-                이전
-              </button>
-              
-              <div className="flex gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                  <button
-                    key={page}
-                    onClick={() => handlePageChange(page)}
-                    className={`w-10 h-10 rounded-lg text-sm font-bold transition-colors ${
-                      currentPage === page 
-                        ? 'bg-indigo-600 text-white shadow-md' 
-                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-500 mb-1 ml-1">시간</span>
+                <input 
+                  type="text" 
+                  placeholder="예: 18:20 - 21:30" 
+                  value={startTime} 
+                  onChange={e => setStartTime(e.target.value)} 
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium text-slate-700" 
+                />
               </div>
 
-              <button 
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-              >
-                다음
-              </button>
-            </div>
-          )}
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-500 mb-1 ml-1">비고</span>
+                <input 
+                  type="text" 
+                  placeholder="예: 정기 정모" 
+                  value={memo} 
+                  onChange={e => setMemo(e.target.value)} 
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium text-slate-700" 
+                />
+              </div>
+
+              <div className="pt-4 flex gap-2 justify-end border-t border-slate-100 mt-6">
+                <button type="button" onClick={() => setIsRegisterModalOpen(false)} className="px-5 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors">취소</button>
+                <button type="submit" className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors">등록</button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 정모 정보 수정 모달 */}
       {editingGathering && (
@@ -552,7 +622,7 @@ export default function GatheringManagementPage() {
                   type="text" 
                   value={formatDateString(editingGathering.gathering_date)} 
                   disabled
-                  className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 font-bold cursor-not-allowed" 
+                  className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 font-bold cursor-not-allowed text-sm" 
                 />
               </div>
 
@@ -562,7 +632,7 @@ export default function GatheringManagementPage() {
                   type="text" 
                   value={editLocation} 
                   onChange={e => setEditLocation(e.target.value)} 
-                  className="px-4 py-2 bg-white border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none rounded-lg transition-all" 
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none rounded-lg transition-all text-sm font-medium" 
                 />
               </div>
 
@@ -572,7 +642,7 @@ export default function GatheringManagementPage() {
                   type="text" 
                   value={editStartTime} 
                   onChange={e => setEditStartTime(e.target.value)} 
-                  className="px-4 py-2 bg-white border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none rounded-lg transition-all" 
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none rounded-lg transition-all text-sm font-medium" 
                 />
               </div>
 
@@ -582,15 +652,15 @@ export default function GatheringManagementPage() {
                   type="text" 
                   value={editMemo} 
                   onChange={e => setEditMemo(e.target.value)} 
-                  className="px-4 py-2 bg-white border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none rounded-lg transition-all" 
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none rounded-lg transition-all text-sm font-medium" 
                 />
               </div>
 
-              <div className="pt-4 flex gap-2 justify-end">
+              <div className="pt-4 flex gap-2 justify-end border-t border-slate-100 mt-6">
                 <button 
                   type="button"
                   onClick={() => setEditingGathering(null)}
-                  className="px-5 py-2 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                  className="px-5 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors"
                 >
                   취소
                 </button>
@@ -629,7 +699,7 @@ export default function GatheringManagementPage() {
                   <button
                     onClick={() => {
                       setIsEditingAttendance(true);
-                      setEditAttendees([...gatheringAttendees]); // 진입 시 기존 데이터 복사
+                      setEditAttendees([...gatheringAttendees]); 
                       setAttendanceSearchTerm('');
                     }}
                     className="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50"
@@ -736,7 +806,7 @@ export default function GatheringManagementPage() {
                     <span className="w-6 text-xs font-bold text-slate-400">{regulars.length + idx + 1}</span>
                     <div className="flex items-center gap-1.5">
                       <span className="font-bold text-slate-800 text-base">{member.name}</span>
-                      <span className="bg-emerald-100 text-emerald-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full border border-emerald-200">
+                      <span className="bg-emerald-100 text-emerald-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded border border-emerald-200">
                         게스트
                       </span>
                     </div>
