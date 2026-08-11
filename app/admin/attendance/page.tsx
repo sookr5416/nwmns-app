@@ -797,7 +797,7 @@ export default function GatheringManagementPage() {
                           <span className="w-5 text-xs font-bold text-slate-400 text-center">{regulars.length + idx + 1}</span>
                           <div className="flex items-center gap-1.5">
                             <span className="font-bold text-slate-800 text-sm">{member.name}</span>
-                            <span className="bg-emerald-100 text-emerald-700 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-emerald-200">게스트</span>
+                            <span className="bg-emerald-100 text-emerald-700 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border border-emerald-200">게스트</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -886,7 +886,7 @@ export default function GatheringManagementPage() {
                       <span className="w-6 text-xs font-bold text-slate-400 text-center">{regulars.length + idx + 1}</span>
                       <div className="flex items-center gap-1.5">
                         <span className="font-bold text-slate-800 text-base">{member.name}</span>
-                        <span className="bg-emerald-100 text-emerald-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded border border-emerald-200">게스트</span>
+                        <span className="bg-emerald-100 text-emerald-700 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full border border-emerald-200">게스트</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-slate-500">

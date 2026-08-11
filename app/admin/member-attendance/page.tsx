@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../../lib/supabase';
+import CustomPopup, { PopupState } from '../../components/CustomPopup'; // 팝업 사용을 위해 추가
 
 // 출석 데이터 구조 인터페이스
 interface AttendanceRecord {
@@ -62,6 +63,20 @@ export default function MonthlyMemberAttendancePage() {
   // 모달(팝업) 상태
   const [selectedMemberModal, setSelectedMemberModal] = useState<ProcessedMember | null>(null);
 
+  // 공통 팝업 상태 (월 미입력 시 경고창 띄우기 용도)
+  const [popup, setPopup] = useState<PopupState>({
+    isOpen: false,
+    type: 'alert',
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const showPopup = (type: 'alert' | 'confirm', title: string, message: string, onConfirm: () => void = closePopup) => {
+    setPopup({ isOpen: true, type, title, message, onConfirm });
+  };
+  const closePopup = () => setPopup(prev => ({ ...prev, isOpen: false }));
+
   // 조회 월(selectedMonth)이 변경될 때마다 데이터를 다시 불러옴
   useEffect(() => {
     fetchData();
@@ -73,6 +88,8 @@ export default function MonthlyMemberAttendancePage() {
   }, [selectedMonth, searchTerm, showWarningOnly, itemsPerPage]);
 
   const fetchData = async () => {
+    if (!selectedMonth) return;
+
     // 선택된 월의 1일과 마지막 일자를 계산
     const year = parseInt(selectedMonth.split('-')[0]);
     const month = parseInt(selectedMonth.split('-')[1]);
@@ -106,6 +123,11 @@ export default function MonthlyMemberAttendancePage() {
 
   // 조회 버튼 클릭 시 입력값을 실제 조건으로 적용
   const handleSearch = () => {
+    // 월 값이 비어있을 경우 경고창 출력 후 중단
+    if (!inputMonth) {
+      return showPopup('alert', '입력 오류', '조회할 월을 선택해주세요.');
+    }
+
     setSelectedMonth(inputMonth);
     setSearchTerm(inputName);
     setShowWarningOnly(inputWarning);
@@ -460,7 +482,7 @@ export default function MonthlyMemberAttendancePage() {
       {/* 상세 출석 날짜 팝업 모달 */}
       {selectedMemberModal && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm transition-opacity"
           onClick={() => setSelectedMemberModal(null)}
         >
           <div 
@@ -507,6 +529,9 @@ export default function MonthlyMemberAttendancePage() {
           </div>
         </div>
       )}
+
+      {/* 경고창 팝업 */}
+      <CustomPopup popup={popup} onClose={closePopup} />
     </div>
   );
 }
