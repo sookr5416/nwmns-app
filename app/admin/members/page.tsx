@@ -29,19 +29,22 @@ export default function MemberManagementPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   
-  // 다중 검색 조건 입력 상태
+  // 제출 중 상태 (더블 클릭 방지용)
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 다중 검색 조건 입력 상태 (생일 월, 가입 월 초기값을 'all'로 변경)
   const [searchName, setSearchName] = useState('');
-  const [searchBirthMonth, setSearchBirthMonth] = useState(''); 
+  const [searchBirthMonth, setSearchBirthMonth] = useState('all'); 
   const [searchGender, setSearchGender] = useState('all');
   const [searchGrade, setSearchGrade] = useState('all');
-  const [searchJoinMonth, setSearchJoinMonth] = useState('');   
+  const [searchJoinMonth, setSearchJoinMonth] = useState('all');   
 
   // '조회' 버튼을 눌렀을 때만 실제 적용되는 검색 상태
   const [appliedSearchName, setAppliedSearchName] = useState('');
-  const [appliedSearchBirthMonth, setAppliedSearchBirthMonth] = useState('');
+  const [appliedSearchBirthMonth, setAppliedSearchBirthMonth] = useState('all');
   const [appliedSearchGender, setAppliedSearchGender] = useState('all');
   const [appliedSearchGrade, setAppliedSearchGrade] = useState('all');
-  const [appliedSearchJoinMonth, setAppliedSearchJoinMonth] = useState('');
+  const [appliedSearchJoinMonth, setAppliedSearchJoinMonth] = useState('all');
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(20);
@@ -120,12 +123,38 @@ export default function MemberManagementPage() {
   };
 
   // 검색 필터 적용 중인지 확인
-  const hasActiveFilter = appliedSearchName || appliedSearchBirthMonth || appliedSearchGender !== 'all' || appliedSearchGrade !== 'all' || appliedSearchJoinMonth;
+  const hasActiveFilter = appliedSearchName || appliedSearchBirthMonth !== 'all' || appliedSearchGender !== 'all' || appliedSearchGrade !== 'all' || appliedSearchJoinMonth !== 'all';
+
+  // 등록 폼 초기화 및 모달 닫기
+  const closeRegisterModal = () => {
+    resetForm();
+    setIsRegisterModalOpen(false);
+  };
+
+  // 삭제 폼 초기화 및 모달 닫기
+  const closeDeleteModal = () => {
+    setMemberToDelete(null);
+    setDeleteReason('');
+    setIsDeleteModalOpen(false);
+  };
+
+  const resetForm = () => {
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    setName(''); 
+    setAge('2000-01-01'); 
+    setGrade('F');
+    setJoinDate(today); 
+  };
 
   // 회원 등록 함수
   const handleRegisterMember = async (e: FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return; // 더블 클릭 차단
+
     if (!name.trim() || !age || !joinDate) return showPopup('alert', '입력 오류', '이름, 생년월일, 가입일자를 모두 입력해주세요.');
+
+    setIsSubmitting(true); // 통신 시작
 
     const cleanAge = age.replace(/-/g, ''); 
     const customCreatedAt = `${joinDate}T00:00:00.000Z`;
@@ -137,19 +166,25 @@ export default function MemberManagementPage() {
       .eq('age', cleanAge)
       .eq('gender', gender);
     
-    if (searchError) return showPopup('alert', '오류', '회원 중복 조회 중 오류가 발생했습니다.');
+    if (searchError) {
+      setIsSubmitting(false);
+      return showPopup('alert', '오류', '회원 중복 조회 중 오류가 발생했습니다.');
+    }
 
     if (existingData && existingData.length > 0) {
       const activeMember = existingData.find(m => m.del_type === 'N' || !m.del_type);
       const deleteMember = existingData.find(m => m.del_type === 'Y');
 
       if (activeMember) {
+        setIsSubmitting(false);
         return showPopup('alert', '등록 불가', '이미 활동 중인 동일한 회원(이름, 생년월일, 성별 일치)이 존재합니다.');
       }
 
       if (deleteMember) {
+        setIsSubmitting(false); 
         return showPopup('confirm', '탈퇴 회원 복구', '과거 탈퇴(비활성화) 이력이 있는 회원입니다.\n기존 출석 기록을 유지하며 계정을 복구하시겠습니까?', async () => {
           closePopup();
+          setIsSubmitting(true); 
 
           const { error: restoreError } = await supabase
             .from('members')
@@ -160,39 +195,33 @@ export default function MemberManagementPage() {
             })
             .eq('id', deleteMember.id);
 
+          setIsSubmitting(false);
+          
           if (restoreError) {
             showPopup('alert', '오류', '회원 복구 중 오류가 발생했습니다.');
           } else {
             showPopup('alert', '복구 완료', '기존 회원 정보 및 출석 기록이 성공적으로 복구되었습니다.');
-            resetForm();
-            setIsRegisterModalOpen(false);
+            closeRegisterModal(); 
             fetchMembers();
           }
         });
       }
+      setIsSubmitting(false);
       return;
     }
 
     const newMember = { name: name.trim(), age: cleanAge, gender, grade, role: '일반', created_at: customCreatedAt}; 
     
     const { error } = await supabase.from('members').insert([newMember]);
+    setIsSubmitting(false); 
+
     if (error) {
       showPopup('alert', '오류', '회원 등록 중 오류가 발생했습니다.');
     } else {
       showPopup('alert', '등록 완료', '성공적으로 등록되었습니다.');
-      resetForm();
-      setIsRegisterModalOpen(false); 
+      closeRegisterModal(); 
       fetchMembers(); 
     }
-  };
-
-  const resetForm = () => {
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    setName(''); 
-    setAge('2000-01-01'); 
-    setGrade('F');
-    setJoinDate(today); 
   };
 
   const handleBatchAttend = async () => {
@@ -261,6 +290,9 @@ export default function MemberManagementPage() {
 
   const executeDelete = async () => {
     if (!memberToDelete) return;
+    if (isSubmitting) return; 
+
+    setIsSubmitting(true);
     const { id, name } = memberToDelete;
 
     const { data: attendanceData, error: attendanceError } = await supabase
@@ -270,7 +302,8 @@ export default function MemberManagementPage() {
       .limit(1);
 
     if (attendanceError) {
-      setIsDeleteModalOpen(false);
+      setIsSubmitting(false);
+      closeDeleteModal();
       return showPopup('alert', '오류', '출석 기록 조회 중 오류가 발생했습니다.');
     }
 
@@ -282,8 +315,9 @@ export default function MemberManagementPage() {
         .update({ del_type: 'Y', del_reason: deleteReason })
         .eq('id', id);
 
+      setIsSubmitting(false);
       if (updateError) {
-        setIsDeleteModalOpen(false);
+        closeDeleteModal();
         return showPopup('alert', '오류', '회원 비활성화 처리 중 오류가 발생했습니다.');
       }
     } else {
@@ -292,16 +326,16 @@ export default function MemberManagementPage() {
         .delete()
         .eq('id', id);
 
+      setIsSubmitting(false);
       if (deleteError) {
-        setIsDeleteModalOpen(false);
+        closeDeleteModal();
         return showPopup('alert', '오류', '회원 삭제 처리 중 오류가 발생했습니다.');
       }
     }
 
     setMembers(members.filter(m => m.id !== id));
     setSelectedMemberIds(selectedMemberIds.filter(selId => selId !== id)); 
-    setIsDeleteModalOpen(false);
-    setMemberToDelete(null);
+    closeDeleteModal(); 
     showPopup('alert', '삭제 완료', hasAttendance ? '출석 기록이 존재하여 안전하게 비활성화 처리되었습니다.' : '회원이 성공적으로 삭제되었습니다.');
   };
 
@@ -379,21 +413,24 @@ export default function MemberManagementPage() {
     }
   };
 
-  // 다중 조건 필터링 적용
+  // 다중 조건 필터링 적용 (월만 비교하도록 로직 수정)
   const filteredMembers = members.filter(member => {
-    if (appliedSearchName && !member.name.toLowerCase().includes(appliedSearchName.toLowerCase())) return false;
+    if (appliedSearchName && !member?.name?.toLowerCase().includes(appliedSearchName.toLowerCase())) return false;
     
-    if (appliedSearchGender !== 'all' && member.gender !== appliedSearchGender) return false;
+    if (appliedSearchGender !== 'all' && member?.gender !== appliedSearchGender) return false;
     
-    if (appliedSearchGrade !== 'all' && member.grade !== appliedSearchGrade) return false;
+    if (appliedSearchGrade !== 'all' && member?.grade !== appliedSearchGrade) return false;
     
-    if (appliedSearchBirthMonth) {
-      const cleanMonth = appliedSearchBirthMonth.replace(/-/g, ''); // 'YYYY-MM' -> 'YYYYMM'
-      if (!member.age.startsWith(cleanMonth)) return false;
+    // 생일 월 체크 (member.age 형식은 YYYYMMDD, 4~5번 인덱스가 월(MM))
+    if (appliedSearchBirthMonth !== 'all') {
+      const birthMonth = member?.age?.length >= 6 ? member.age.substring(4, 6) : '';
+      if (birthMonth !== appliedSearchBirthMonth) return false;
     }
 
-    if (appliedSearchJoinMonth) {
-      if (!member.created_at.startsWith(appliedSearchJoinMonth)) return false;
+    // 가입 월 체크 (member.created_at 형식은 YYYY-MM-DD..., 5~6번 인덱스가 월(MM))
+    if (appliedSearchJoinMonth !== 'all') {
+      const joinMonth = member?.created_at?.length >= 7 ? member.created_at.substring(5, 7) : '';
+      if (joinMonth !== appliedSearchJoinMonth) return false;
     }
 
     return true;
@@ -476,14 +513,19 @@ export default function MemberManagementPage() {
             />
           </div>
 
+          {/* 생일 월 검색 (드롭다운으로 변경) */}
           <div className="flex flex-col">
-            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">생년월</span>
-            <input
-              type="month"
+            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">생일(월)</span>
+            <select
               value={searchBirthMonth}
               onChange={(e) => setSearchBirthMonth(e.target.value)}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
-            />
+            >
+              <option value="all">전체</option>
+              {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(m => (
+                <option key={m} value={m}>{m}월</option>
+              ))}
+            </select>
           </div>
 
           <div className="flex flex-col">
@@ -511,14 +553,19 @@ export default function MemberManagementPage() {
             </select>
           </div>
 
+          {/* 가입 월 검색 (드롭다운으로 변경) */}
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-500 mb-1 ml-1">가입월</span>
-            <input
-              type="month"
+            <select
               value={searchJoinMonth}
               onChange={(e) => setSearchJoinMonth(e.target.value)}
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
-            />
+            >
+              <option value="all">전체</option>
+              {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(m => (
+                <option key={m} value={m}>{m}월</option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
@@ -729,12 +776,13 @@ export default function MemberManagementPage() {
 
       {/* 신규 회원 등록 팝업 모달 */}
       {isRegisterModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-40 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-scale-up">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
               <h3 className="text-lg font-bold text-slate-800">신규 회원 등록</h3>
+              {/* 닫을 때 데이터 초기화 */}
               <button
-                onClick={() => setIsRegisterModalOpen(false)}
+                onClick={closeRegisterModal}
                 className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-500 hover:bg-slate-100 transition-colors"
               >
                 ✕
@@ -771,8 +819,25 @@ export default function MemberManagementPage() {
               </div>
 
               <div className="pt-4 flex gap-2 justify-end border-t border-slate-100 mt-6">
-                <button type="button" onClick={() => setIsRegisterModalOpen(false)} className="px-5 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors">취소</button>
-                <button type="submit" className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors">등록</button>
+                {/* 취소할 때 데이터 초기화 */}
+                <button 
+                  type="button" 
+                  onClick={closeRegisterModal} 
+                  disabled={isSubmitting}
+                  className="px-5 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  취소
+                </button>
+                {/* 등록 더블클릭 방지 */}
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting}
+                  className={`px-5 py-2 text-sm font-bold text-white rounded-lg shadow-sm transition-colors ${
+                    isSubmitting ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
+                  }`}
+                >
+                  등록하기
+                </button>
               </div>
             </form>
           </div>
@@ -781,12 +846,13 @@ export default function MemberManagementPage() {
 
       {/* 사유를 입력받는 삭제 전용 모달창 */}
       {isDeleteModalOpen && memberToDelete && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-40 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
             <div className="px-6 py-4 bg-red-50 border-b border-red-100 flex justify-between items-center">
               <h3 className="text-lg font-bold text-red-700">회원 삭제</h3>
+              {/* 닫을 때 데이터 초기화 */}
               <button
-                onClick={() => setIsDeleteModalOpen(false)}
+                onClick={closeDeleteModal}
                 className="w-8 h-8 rounded-full bg-white border border-red-200 flex items-center justify-center font-bold text-red-500 hover:bg-red-100 transition-colors"
               >
                 ✕
@@ -814,15 +880,21 @@ export default function MemberManagementPage() {
             </div>
 
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex gap-2 justify-end">
+              {/* 취소할 때 데이터 초기화 */}
               <button
-                onClick={() => setIsDeleteModalOpen(false)}
-                className="px-5 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors"
+                onClick={closeDeleteModal}
+                disabled={isSubmitting}
+                className="px-5 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors disabled:opacity-50"
               >
                 취소
               </button>
+              {/* 삭제 더블클릭 방지 */}
               <button
                 onClick={executeDelete}
-                className="px-5 py-2 text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg shadow-sm transition-colors"
+                disabled={isSubmitting}
+                className={`px-5 py-2 text-sm font-bold text-white rounded-lg shadow-sm transition-colors ${
+                  isSubmitting ? 'bg-red-400 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'
+                }`}
               >
                 삭제
               </button>
