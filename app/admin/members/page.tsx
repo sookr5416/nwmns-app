@@ -339,7 +339,7 @@ export default function MemberManagementPage() {
     });
   };
 
-  // 🌟 운영진 부여/해제 함수 (모달 안에서 사용하기 위해 로직 수정)
+  // 운영진 부여/해제 함수 (모달 안에서 사용하기 위해 로직 수정)
   const handleToggleRole = (id: string, currentRole: string, memberName: string) => {
     const newRole = currentRole === '일반' ? '운영진' : '일반';
     const msg = currentRole === '일반' ? `'운영진'으로 임명하시겠습니까?` : `운영진 권한을 해제하시겠습니까?`;
@@ -751,7 +751,7 @@ export default function MemberManagementPage() {
                   <td className="px-6 py-4 text-center">
                     <span className="inline-flex items-center justify-center bg-indigo-50 text-indigo-700 font-bold w-8 h-8 rounded-full">{monthlyCount}</span>
                   </td>
-                  {/* 🌟 버튼 순서 변경: 삭제 및 운영진 버튼 제거 & 수정 맨 우측 */}
+                  {/* 버튼 순서 변경: 삭제 및 운영진 버튼 제거 & 수정 맨 우측 */}
                   <td className="px-6 py-4 text-right space-x-2">
                     <button 
                       onClick={() => handleCheckIn(member.id, member.name)}
@@ -890,7 +890,7 @@ export default function MemberManagementPage() {
         </div>
       )}
 
-      {/* 🌟 회원 정보 수정 팝업 모달 */}
+      {/* 회원 정보 수정 팝업 모달 */}
       {isEditModalOpen && editingMember && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-40 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-scale-up">
@@ -967,7 +967,7 @@ export default function MemberManagementPage() {
                 />
               </div>
 
-              {/* 🌟 팝업 내 하단 액션 버튼 그룹 */}
+              {/* 팝업 내 하단 액션 버튼 그룹 */}
               <div className="pt-4 flex items-center justify-between border-t border-slate-100 mt-6">
                 
                 {/* 좌측: 삭제 및 운영진 부여/해제 버튼 */}
@@ -993,7 +993,7 @@ export default function MemberManagementPage() {
                     삭제
                   </button>
 
-                  {/* 🌟 운영진 부여/해제 버튼 팝업 내부로 이동 */}
+                  {/* 운영진 부여/해제 버튼 팝업 내부로 이동 */}
                   {editingMember.role !== '모임장' && (
                     <button 
                       type="button"

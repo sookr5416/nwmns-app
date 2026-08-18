@@ -24,7 +24,7 @@ interface Member {
   grade: string;
   role: string;
   created_at: string; 
-  att_reason?: string; // 🌟 비고 컬럼 추가
+  att_reason?: string; // 비고 컬럼 추가
 }
 
 // 출석 통계 데이터 구조 인터페이스
@@ -33,7 +33,7 @@ interface ProcessedMember extends Member {
   attendedDates: string[];
 }
 
-// 🌟 정렬 필드에 att_reason 추가
+// 정렬 필드에 att_reason 추가
 type SortField = 'name' | 'age' | 'gender' | 'grade' | 'created_at' | 'att_reason' | 'monthlyCount';
 type SortOrder = 'asc' | 'desc' | null;
 
@@ -108,7 +108,7 @@ export default function MonthlyMemberAttendancePage() {
     
     if (attError) console.error('출석 데이터 조회 에러:', attError);
 
-    // 🌟 att_reason 항목 추가해서 Select
+    // att_reason 항목 추가해서 Select
     const { data: memData, error: memError } = await supabase
       .from('members')
       .select('id, name, age, gender, grade, role, created_at, att_reason')
@@ -212,7 +212,7 @@ export default function MonthlyMemberAttendancePage() {
         else if (sortField === 'age') { valA = a.age; valB = b.age; }
         else if (sortField === 'gender') { valA = a.gender; valB = b.gender; }
         else if (sortField === 'grade') { valA = a.grade; valB = b.grade; }
-        else if (sortField === 'att_reason') { valA = a.att_reason || ''; valB = b.att_reason || ''; } // 🌟 정렬 조건 추가
+        else if (sortField === 'att_reason') { valA = a.att_reason || ''; valB = b.att_reason || ''; } // 정렬 조건 추가
         else if (sortField === 'created_at') { valA = new Date(a.created_at).getTime(); valB = new Date(b.created_at).getTime(); }
         else if (sortField === 'monthlyCount') { valA = a.monthlyCount; valB = b.monthlyCount; }
 
@@ -369,7 +369,7 @@ export default function MonthlyMemberAttendancePage() {
                 <th onClick={() => handleSort('created_at')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                   가입일자 {sortField === 'created_at' && (sortOrder === 'asc' ? '▲' : '▼')}
                 </th>
-                {/* 🌟 비고 컬럼 추가 */}
+                {/* 비고 컬럼 추가 */}
                 <th onClick={() => handleSort('att_reason')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                   비고 {sortField === 'att_reason' && (sortOrder === 'asc' ? '▲' : '▼')}
                 </th>
@@ -411,7 +411,7 @@ export default function MonthlyMemberAttendancePage() {
                   <td className="px-6 py-4 text-slate-600 text-sm font-medium">
                     {formatJoinDate(member.created_at)}
                   </td>
-                  {/* 🌟 비고 데이터 추가 */}
+                  {/* 비고 데이터 추가 */}
                   <td className="px-6 py-4 text-slate-600 text-sm font-medium">
                     {member.att_reason || '-'}
                   </td>
@@ -434,7 +434,7 @@ export default function MonthlyMemberAttendancePage() {
               {/* 필터 결과가 없을 때 보여주는 빈 상태 */}
               {currentMembers.length === 0 && (
                 <tr>
-                  {/* 🌟 컬럼 추가로 인해 colSpan 7 -> 8 로 변경 */}
+                  {/* 컬럼 추가로 인해 colSpan 7 -> 8 로 변경 */}
                   <td colSpan={8} className="px-6 py-16 text-center text-slate-400 font-medium">
                     조건에 맞는 회원이 없습니다.
                   </td>
