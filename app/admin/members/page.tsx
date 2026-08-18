@@ -39,6 +39,7 @@ export default function MemberManagementPage() {
   const [searchGender, setSearchGender] = useState('all');
   const [searchGrade, setSearchGrade] = useState('all');
   const [searchJoinMonth, setSearchJoinMonth] = useState('all');   
+  const [searchAttReason, setSearchAttReason] = useState(''); // 🌟 비고 검색 상태 추가
 
   // '조회' 버튼을 눌렀을 때만 실제 적용되는 검색 상태
   const [appliedSearchName, setAppliedSearchName] = useState('');
@@ -46,6 +47,7 @@ export default function MemberManagementPage() {
   const [appliedSearchGender, setAppliedSearchGender] = useState('all');
   const [appliedSearchGrade, setAppliedSearchGrade] = useState('all');
   const [appliedSearchJoinMonth, setAppliedSearchJoinMonth] = useState('all');
+  const [appliedSearchAttReason, setAppliedSearchAttReason] = useState(''); // 🌟 비고 적용 상태 추가
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(20);
@@ -129,10 +131,11 @@ export default function MemberManagementPage() {
     setAppliedSearchGender(searchGender);
     setAppliedSearchGrade(searchGrade);
     setAppliedSearchJoinMonth(searchJoinMonth);
+    setAppliedSearchAttReason(searchAttReason); // 🌟 비고 검색어 적용
     setCurrentPage(1);
   };
 
-  const hasActiveFilter = appliedSearchName || appliedSearchBirthMonth !== 'all' || appliedSearchGender !== 'all' || appliedSearchGrade !== 'all' || appliedSearchJoinMonth !== 'all';
+  const hasActiveFilter = appliedSearchName || appliedSearchBirthMonth !== 'all' || appliedSearchGender !== 'all' || appliedSearchGrade !== 'all' || appliedSearchJoinMonth !== 'all' || appliedSearchAttReason;
 
   const resetForm = () => {
     const now = new Date();
@@ -339,7 +342,6 @@ export default function MemberManagementPage() {
     });
   };
 
-  // 운영진 부여/해제 함수 (모달 안에서 사용하기 위해 로직 수정)
   const handleToggleRole = (id: string, currentRole: string, memberName: string) => {
     const newRole = currentRole === '일반' ? '운영진' : '일반';
     const msg = currentRole === '일반' ? `'운영진'으로 임명하시겠습니까?` : `운영진 권한을 해제하시겠습니까?`;
@@ -348,7 +350,6 @@ export default function MemberManagementPage() {
       closePopup();
       await supabase.from('members').update({ role: newRole }).eq('id', id);
       
-      // 만약 팝업 안에서 실행했다면 모달 데이터도 업데이트해서 바로 반영되게 함
       if (editingMember && editingMember.id === id) {
         setEditingMember(prev => prev ? { ...prev, role: newRole } : null);
       }
@@ -480,6 +481,9 @@ export default function MemberManagementPage() {
 
   const filteredMembers = members.filter(member => {
     if (appliedSearchName && !member?.name?.toLowerCase().includes(appliedSearchName.toLowerCase())) return false;
+    // 🌟 비고(att_reason) 필터링 추가
+    if (appliedSearchAttReason && !member?.att_reason?.toLowerCase().includes(appliedSearchAttReason.toLowerCase())) return false;
+    
     if (appliedSearchGender !== 'all' && member?.gender !== appliedSearchGender) return false;
     if (appliedSearchGrade !== 'all' && member?.grade !== appliedSearchGrade) return false;
     
@@ -519,11 +523,15 @@ export default function MemberManagementPage() {
 
       if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
-      return 0;
     }
 
     if (weightA !== weightB) return weightA - weightB;
-    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    
+    const timeA = new Date(a.created_at).getTime();
+    const timeB = new Date(b.created_at).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+
+    return a.name.localeCompare(b.name);
   });
 
   const totalPages = Math.ceil(sortedMembers.length / itemsPerPage) || 1;
@@ -560,7 +568,8 @@ export default function MemberManagementPage() {
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
         <h2 className="text-sm font-bold text-slate-700 mb-4">상세 검색</h2>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 w-full">
+        {/* 🌟 6개의 검색창을 위한 그리드 레이아웃 개선 (md:grid-cols-3 lg:grid-cols-6) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 w-full">
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-500 mb-1 ml-1">이름</span>
             <input
@@ -624,6 +633,19 @@ export default function MemberManagementPage() {
                 <option key={m} value={m}>{m}월</option>
               ))}
             </select>
+          </div>
+          
+          {/* 🌟 비고 검색창 추가 */}
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-slate-500 mb-1 ml-1">비고</span>
+            <input
+              type="text"
+              placeholder="비고 검색"
+              value={searchAttReason}
+              onChange={(e) => setSearchAttReason(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+            />
           </div>
         </div>
       </div>
@@ -751,7 +773,6 @@ export default function MemberManagementPage() {
                   <td className="px-6 py-4 text-center">
                     <span className="inline-flex items-center justify-center bg-indigo-50 text-indigo-700 font-bold w-8 h-8 rounded-full">{monthlyCount}</span>
                   </td>
-                  {/* 버튼 순서 변경: 삭제 및 운영진 버튼 제거 & 수정 맨 우측 */}
                   <td className="px-6 py-4 text-right space-x-2">
                     <button 
                       onClick={() => handleCheckIn(member.id, member.name)}
@@ -967,10 +988,8 @@ export default function MemberManagementPage() {
                 />
               </div>
 
-              {/* 팝업 내 하단 액션 버튼 그룹 */}
               <div className="pt-4 flex items-center justify-between border-t border-slate-100 mt-6">
                 
-                {/* 좌측: 삭제 및 운영진 부여/해제 버튼 */}
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -993,7 +1012,6 @@ export default function MemberManagementPage() {
                     삭제
                   </button>
 
-                  {/* 운영진 부여/해제 버튼 팝업 내부로 이동 */}
                   {editingMember.role !== '모임장' && (
                     <button 
                       type="button"
@@ -1006,7 +1024,6 @@ export default function MemberManagementPage() {
                   )}
                 </div>
 
-                {/* 우측: 취소 및 저장 버튼 */}
                 <div className="flex gap-2">
                   <button 
                     type="button" 
