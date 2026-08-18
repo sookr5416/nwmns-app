@@ -19,10 +19,11 @@ interface Member {
   created_at: string;
   del_type?: string;
   del_reason?: string;
+  att_reason?: string; 
   attendances?: Attendance[]; 
 }
 
-type SortField = 'name' | 'age' | 'gender' | 'grade' | 'created_at' | 'last_attendance' | 'monthly_count';
+type SortField = 'name' | 'age' | 'gender' | 'grade' | 'att_reason' | 'created_at' | 'last_attendance' | 'monthly_count';
 type SortOrder = 'asc' | 'desc' | null;
 
 export default function MemberManagementPage() {
@@ -32,7 +33,7 @@ export default function MemberManagementPage() {
   // 제출 중 상태 (더블 클릭 방지용)
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 다중 검색 조건 입력 상태 (생일 월, 가입 월 초기값을 'all'로 변경)
+  // 다중 검색 조건 입력 상태 
   const [searchName, setSearchName] = useState('');
   const [searchBirthMonth, setSearchBirthMonth] = useState('all'); 
   const [searchGender, setSearchGender] = useState('all');
@@ -57,10 +58,20 @@ export default function MemberManagementPage() {
   const [age, setAge] = useState('2000-01-01'); 
   const [gender, setGender] = useState('남');
   const [grade, setGrade] = useState('F'); 
+  const [attReason, setAttReason] = useState(''); 
   const [joinDate, setJoinDate] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   });
+
+  // 회원 수정 폼 상태
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [editAge, setEditAge] = useState(''); 
+  const [editGender, setEditGender] = useState('');
+  const [editGrade, setEditGrade] = useState(''); 
+  const [editAttReason, setEditAttReason] = useState(''); 
+  const [editJoinDate, setEditJoinDate] = useState('');
 
   // 모달 상태 관리
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -112,7 +123,6 @@ export default function MemberManagementPage() {
     return data && data.length > 0;
   };
 
-  // 조회 버튼 클릭 시 검색 조건 적용
   const handleSearch = () => {
     setAppliedSearchName(searchName);
     setAppliedSearchBirthMonth(searchBirthMonth);
@@ -122,39 +132,95 @@ export default function MemberManagementPage() {
     setCurrentPage(1);
   };
 
-  // 검색 필터 적용 중인지 확인
   const hasActiveFilter = appliedSearchName || appliedSearchBirthMonth !== 'all' || appliedSearchGender !== 'all' || appliedSearchGrade !== 'all' || appliedSearchJoinMonth !== 'all';
-
-  // 등록 폼 초기화 및 모달 닫기
-  const closeRegisterModal = () => {
-    resetForm();
-    setIsRegisterModalOpen(false);
-  };
-
-  // 삭제 폼 초기화 및 모달 닫기
-  const closeDeleteModal = () => {
-    setMemberToDelete(null);
-    setDeleteReason('');
-    setIsDeleteModalOpen(false);
-  };
 
   const resetForm = () => {
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     setName(''); 
     setAge('2000-01-01'); 
+    setGender('남');
     setGrade('F');
+    setAttReason('');
     setJoinDate(today); 
   };
 
-  // 회원 등록 함수
+  const closeRegisterModal = () => {
+    resetForm();
+    setIsRegisterModalOpen(false);
+  };
+
+  const closeDeleteModal = () => {
+    setMemberToDelete(null);
+    setDeleteReason('');
+    setIsDeleteModalOpen(false);
+  };
+
+  const closeEditModal = () => {
+    setEditingMember(null);
+    setIsEditModalOpen(false);
+  };
+
+  const openEditModal = (member: Member) => {
+    setEditingMember(member);
+    
+    let parsedAge = '2000-01-01';
+    if (member.age && member.age.length === 8) {
+      parsedAge = `${member.age.substring(0,4)}-${member.age.substring(4,6)}-${member.age.substring(6,8)}`;
+    } else if (member.age && member.age.length === 6) {
+      const prefix = parseInt(member.age.substring(0,2)) > 50 ? '19' : '20';
+      parsedAge = `${prefix}${member.age.substring(0,2)}-${member.age.substring(2,4)}-${member.age.substring(4,6)}`;
+    }
+    
+    setEditAge(parsedAge);
+    setEditGender(member.gender || '남');
+    setEditGrade(member.grade || 'F');
+    setEditAttReason(member.att_reason || ''); 
+    setEditJoinDate(member.created_at ? member.created_at.substring(0, 10) : '');
+    
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateMember = async (e: FormEvent) => {
+    e.preventDefault();
+    if (isSubmitting || !editingMember) return;
+
+    if (!editAge || !editJoinDate) return showPopup('alert', '입력 오류', '생년월일과 가입일자를 모두 입력해주세요.');
+
+    setIsSubmitting(true);
+
+    const cleanAge = editAge.replace(/-/g, ''); 
+    const customCreatedAt = `${editJoinDate}T00:00:00.000Z`;
+
+    const { error } = await supabase
+      .from('members')
+      .update({
+        age: cleanAge,
+        gender: editGender,
+        grade: editGrade,
+        att_reason: editAttReason.trim(), 
+        created_at: customCreatedAt
+      })
+      .eq('id', editingMember.id);
+
+    setIsSubmitting(false);
+
+    if (error) {
+      showPopup('alert', '오류', '회원 정보 수정 중 오류가 발생했습니다.');
+    } else {
+      showPopup('alert', '수정 완료', '회원 정보가 성공적으로 수정되었습니다.');
+      closeEditModal();
+      fetchMembers();
+    }
+  };
+
   const handleRegisterMember = async (e: FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return; // 더블 클릭 차단
+    if (isSubmitting) return; 
 
     if (!name.trim() || !age || !joinDate) return showPopup('alert', '입력 오류', '이름, 생년월일, 가입일자를 모두 입력해주세요.');
 
-    setIsSubmitting(true); // 통신 시작
+    setIsSubmitting(true); 
 
     const cleanAge = age.replace(/-/g, ''); 
     const customCreatedAt = `${joinDate}T00:00:00.000Z`;
@@ -191,6 +257,8 @@ export default function MemberManagementPage() {
             .update({
               del_type: 'N',
               del_reason: null,
+              grade: grade, 
+              att_reason: attReason.trim(), 
               created_at: customCreatedAt
             })
             .eq('id', deleteMember.id);
@@ -210,7 +278,7 @@ export default function MemberManagementPage() {
       return;
     }
 
-    const newMember = { name: name.trim(), age: cleanAge, gender, grade, role: '일반', created_at: customCreatedAt}; 
+    const newMember = { name: name.trim(), age: cleanAge, gender, grade, role: '일반', att_reason: attReason.trim(), created_at: customCreatedAt}; 
     
     const { error } = await supabase.from('members').insert([newMember]);
     setIsSubmitting(false); 
@@ -271,6 +339,7 @@ export default function MemberManagementPage() {
     });
   };
 
+  // 🌟 운영진 부여/해제 함수 (모달 안에서 사용하기 위해 로직 수정)
   const handleToggleRole = (id: string, currentRole: string, memberName: string) => {
     const newRole = currentRole === '일반' ? '운영진' : '일반';
     const msg = currentRole === '일반' ? `'운영진'으로 임명하시겠습니까?` : `운영진 권한을 해제하시겠습니까?`;
@@ -278,6 +347,11 @@ export default function MemberManagementPage() {
     showPopup('confirm', '권한 변경', `${memberName} 회원님을 ${msg}`, async () => {
       closePopup();
       await supabase.from('members').update({ role: newRole }).eq('id', id);
+      
+      // 만약 팝업 안에서 실행했다면 모달 데이터도 업데이트해서 바로 반영되게 함
+      if (editingMember && editingMember.id === id) {
+        setEditingMember(prev => prev ? { ...prev, role: newRole } : null);
+      }
       fetchMembers();
     });
   };
@@ -404,30 +478,16 @@ export default function MemberManagementPage() {
     }
   };
 
-  const handleUpdateGrade = async (id: string, newGrade: string) => {
-    const { error } = await supabase.from('members').update({ grade: newGrade }).eq('id', id);
-    if (error) {
-      showPopup('alert', '오류', '급수 수정 중 오류가 발생했습니다.');
-    } else {
-      setMembers(members.map(m => m.id === id ? { ...m, grade: newGrade } : m));
-    }
-  };
-
-  // 다중 조건 필터링 적용 (월만 비교하도록 로직 수정)
   const filteredMembers = members.filter(member => {
     if (appliedSearchName && !member?.name?.toLowerCase().includes(appliedSearchName.toLowerCase())) return false;
-    
     if (appliedSearchGender !== 'all' && member?.gender !== appliedSearchGender) return false;
-    
     if (appliedSearchGrade !== 'all' && member?.grade !== appliedSearchGrade) return false;
     
-    // 생일 월 체크 (member.age 형식은 YYYYMMDD, 4~5번 인덱스가 월(MM))
     if (appliedSearchBirthMonth !== 'all') {
       const birthMonth = member?.age?.length >= 6 ? member.age.substring(4, 6) : '';
       if (birthMonth !== appliedSearchBirthMonth) return false;
     }
 
-    // 가입 월 체크 (member.created_at 형식은 YYYY-MM-DD..., 5~6번 인덱스가 월(MM))
     if (appliedSearchJoinMonth !== 'all') {
       const joinMonth = member?.created_at?.length >= 7 ? member.created_at.substring(5, 7) : '';
       if (joinMonth !== appliedSearchJoinMonth) return false;
@@ -449,6 +509,7 @@ export default function MemberManagementPage() {
       else if (sortField === 'age') { valA = a.age; valB = b.age; }
       else if (sortField === 'gender') { valA = a.gender; valB = b.gender; }
       else if (sortField === 'grade') { valA = a.grade; valB = b.grade; }
+      else if (sortField === 'att_reason') { valA = a.att_reason || ''; valB = b.att_reason || ''; } 
       else if (sortField === 'created_at') { valA = new Date(a.created_at).getTime(); valB = new Date(b.created_at).getTime(); }
       else if (sortField === 'last_attendance') { 
         valA = a.attendances && a.attendances.length > 0 ? Math.max(...a.attendances.map(att => new Date(att.attended_date).getTime())) : 0; 
@@ -479,7 +540,6 @@ export default function MemberManagementPage() {
           <p className="text-sm text-slate-500 mt-1">회원을 검색하고, 매 모임마다 출석을 체크해 통계를 확인하세요.</p>
         </div>
         
-        {/* 검색 영역 바깥(우측 상단)으로 분리된 버튼 영역 */}
         <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
           <button
             onClick={handleSearch}
@@ -513,7 +573,6 @@ export default function MemberManagementPage() {
             />
           </div>
 
-          {/* 생일 월 검색 (드롭다운으로 변경) */}
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-500 mb-1 ml-1">생일(월)</span>
             <select
@@ -553,7 +612,6 @@ export default function MemberManagementPage() {
             </select>
           </div>
 
-          {/* 가입 월 검색 (드롭다운으로 변경) */}
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-500 mb-1 ml-1">가입월</span>
             <select
@@ -580,7 +638,6 @@ export default function MemberManagementPage() {
         </div>
         
         <div className="flex flex-col md:flex-row items-center gap-2 w-full md:w-auto">
-          {/* 정모 참석 버튼 */}
           <button 
             onClick={handleBatchAttend}
             className="w-full md:w-auto px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-lg shadow-sm transition-colors whitespace-nowrap active:scale-95"
@@ -639,6 +696,9 @@ export default function MemberManagementPage() {
               <th onClick={() => handleSort('last_attendance')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                 최근 참여일 {sortField === 'last_attendance' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
+              <th onClick={() => handleSort('att_reason')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+                비고 {sortField === 'att_reason' && (sortOrder === 'asc' ? '▲' : '▼')}
+              </th>
               <th onClick={() => handleSort('monthly_count')} className="px-6 py-4 font-bold text-center cursor-pointer hover:text-indigo-600 transition-colors">
                 이번 달 출석 {sortField === 'monthly_count' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
@@ -655,8 +715,6 @@ export default function MemberManagementPage() {
               const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
               const isCheckedToday = member.attendances?.some(a => a.attended_date === today);
               const isSelected = selectedMemberIds.includes(member.id);
-
-              const isStaff = member.role === '모임장' || member.role === '운영진';
 
               return (
                 <tr key={member.id} className={`transition-colors ${isSelected ? 'bg-indigo-50/50' : 'hover:bg-slate-50/50'}`}>
@@ -682,22 +740,18 @@ export default function MemberManagementPage() {
                       {member.gender}
                     </span>
                   </td>
-                  <td className="px-4 py-4">
-                    <select 
-                      value={member.grade} 
-                      onChange={(e) => handleUpdateGrade(member.id, e.target.value)}
-                      className="bg-transparent font-bold text-slate-700 text-lg focus:outline-none cursor-pointer py-1 appearance-none min-w-[3.5rem] text-center"
-                    >
-                      {['A', 'B', 'C', 'D', 'E', 'F'].map(lvl => (
-                        <option key={lvl} value={lvl}>{lvl}조</option>
-                      ))}
-                    </select>
+                  <td className="px-6 py-4 text-slate-700 font-bold">
+                    {member.grade}조
                   </td>
                   <td className="px-6 py-4 text-slate-600 font-medium text-sm">{joinDate}</td>
                   <td className="px-6 py-4 text-slate-600 font-medium text-sm">{lastAttendance}</td>
+                  <td className="px-6 py-4 text-slate-600 text-sm font-medium">
+                    {member.att_reason || '-'}
+                  </td>
                   <td className="px-6 py-4 text-center">
                     <span className="inline-flex items-center justify-center bg-indigo-50 text-indigo-700 font-bold w-8 h-8 rounded-full">{monthlyCount}</span>
                   </td>
+                  {/* 🌟 버튼 순서 변경: 삭제 및 운영진 버튼 제거 & 수정 맨 우측 */}
                   <td className="px-6 py-4 text-right space-x-2">
                     <button 
                       onClick={() => handleCheckIn(member.id, member.name)}
@@ -706,21 +760,11 @@ export default function MemberManagementPage() {
                     >
                       {isCheckedToday ? '✓ 완료' : '출석'}
                     </button>
-                    {member.role !== '모임장' && (
-                      <button onClick={() => handleToggleRole(member.id, member.role, member.name)} className="px-2 py-1.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors">
-                        {member.role === '일반' ? '운영진 부여' : '운영진 해제'}
-                      </button>
-                    )}
-                    <button onClick={() => handleDeleteMemberClick(member.id, member.name)}
-                      disabled={isStaff}
-                      title={isStaff ? '모임장/운영진은 삭제할 수 없습니다.' : '회원 삭제'} 
-                      className={`px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                        isStaff
-                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                          : 'bg-red-100 text-red-700 hover:bg-red-200'
-                      }`}
+                    <button 
+                      onClick={() => openEditModal(member)}
+                      className="px-2.5 py-1.5 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors"
                     >
-                      삭제
+                      수정
                     </button>
                   </td>
                 </tr>
@@ -729,7 +773,7 @@ export default function MemberManagementPage() {
             
             {currentMembers.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-6 py-16 text-center text-slate-400 font-medium">
+                <td colSpan={10} className="px-6 py-16 text-center text-slate-400 font-medium">
                   {hasActiveFilter ? '검색 조건에 맞는 회원이 없습니다.' : '등록된 회원이 없습니다.'}
                 </td>
               </tr>
@@ -780,7 +824,6 @@ export default function MemberManagementPage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-scale-up">
             <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
               <h3 className="text-lg font-bold text-slate-800">신규 회원 등록</h3>
-              {/* 닫을 때 데이터 초기화 */}
               <button
                 onClick={closeRegisterModal}
                 className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-500 hover:bg-slate-100 transition-colors"
@@ -817,9 +860,13 @@ export default function MemberManagementPage() {
                   </select>
                 </div>
               </div>
+              
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-500 mb-1 ml-1">비고 (선택사항)</span>
+                <input type="text" placeholder="예: 활동 일시 중지 등" value={attReason} onChange={e => setAttReason(e.target.value)} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium" />
+              </div>
 
               <div className="pt-4 flex gap-2 justify-end border-t border-slate-100 mt-6">
-                {/* 취소할 때 데이터 초기화 */}
                 <button 
                   type="button" 
                   onClick={closeRegisterModal} 
@@ -828,7 +875,6 @@ export default function MemberManagementPage() {
                 >
                   취소
                 </button>
-                {/* 등록 더블클릭 방지 */}
                 <button 
                   type="submit" 
                   disabled={isSubmitting}
@@ -844,13 +890,154 @@ export default function MemberManagementPage() {
         </div>
       )}
 
+      {/* 🌟 회원 정보 수정 팝업 모달 */}
+      {isEditModalOpen && editingMember && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-scale-up">
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-800">회원 정보 수정</h3>
+              <button
+                onClick={closeEditModal}
+                className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-500 hover:bg-slate-100 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleUpdateMember} className="p-6 space-y-4">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-500 mb-1 ml-1">이름 (수정 불가)</span>
+                <input 
+                  type="text" 
+                  value={editingMember.name} 
+                  disabled 
+                  className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 text-sm font-bold cursor-not-allowed" 
+                />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-500 mb-1 ml-1">생년월일</span>
+                <input 
+                  type="date" 
+                  value={editAge} 
+                  onChange={e => setEditAge(e.target.value)} 
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 text-sm font-medium" 
+                />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-500 mb-1 ml-1">가입일자</span>
+                <input 
+                  type="date" 
+                  value={editJoinDate} 
+                  onChange={e => setEditJoinDate(e.target.value)} 
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 text-sm font-medium" 
+                />
+              </div>
+              
+              <div className="flex gap-4">
+                <div className="flex flex-col flex-1">
+                  <span className="text-xs font-bold text-slate-500 mb-1 ml-1">성별</span>
+                  <select 
+                    value={editGender} 
+                    onChange={e => setEditGender(e.target.value)} 
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium text-slate-700"
+                  >
+                    <option value="남">남</option>
+                    <option value="여">여</option>
+                  </select>
+                </div>
+                <div className="flex flex-col flex-1">
+                  <span className="text-xs font-bold text-slate-500 mb-1 ml-1">급수</span>
+                  <select 
+                    value={editGrade} 
+                    onChange={e => setEditGrade(e.target.value)} 
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium text-slate-700"
+                  >
+                    {['A', 'B', 'C', 'D', 'E', 'F'].map(lvl => <option key={lvl} value={lvl}>{lvl}조</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-500 mb-1 ml-1">비고</span>
+                <input 
+                  type="text" 
+                  placeholder="예: 활동 일시 중지 등" 
+                  value={editAttReason} 
+                  onChange={e => setEditAttReason(e.target.value)} 
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium" 
+                />
+              </div>
+
+              {/* 🌟 팝업 내 하단 액션 버튼 그룹 */}
+              <div className="pt-4 flex items-center justify-between border-t border-slate-100 mt-6">
+                
+                {/* 좌측: 삭제 및 운영진 부여/해제 버튼 */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const isStaff = editingMember.role === '모임장' || editingMember.role === '운영진';
+                      if (isStaff) return; // 클릭 무시
+                      const memberId = editingMember.id;
+                      const memberName = editingMember.name;
+                      closeEditModal();
+                      handleDeleteMemberClick(memberId, memberName);
+                    }}
+                    disabled={editingMember.role === '모임장' || editingMember.role === '운영진' || isSubmitting}
+                    className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors ${
+                      editingMember.role === '모임장' || editingMember.role === '운영진' 
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
+                        : 'bg-red-50 text-red-500 hover:bg-red-500 hover:text-white'
+                    }`}
+                    title={editingMember.role === '모임장' || editingMember.role === '운영진' ? '모임장/운영진은 삭제할 수 없습니다.' : '회원 삭제'}
+                  >
+                    삭제
+                  </button>
+
+                  {/* 🌟 운영진 부여/해제 버튼 팝업 내부로 이동 */}
+                  {editingMember.role !== '모임장' && (
+                    <button 
+                      type="button"
+                      onClick={() => handleToggleRole(editingMember.id, editingMember.role, editingMember.name)}
+                      disabled={isSubmitting}
+                      className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                    >
+                      {editingMember.role === '일반' ? '운영진 부여' : '운영진 해제'}
+                    </button>
+                  )}
+                </div>
+
+                {/* 우측: 취소 및 저장 버튼 */}
+                <div className="flex gap-2">
+                  <button 
+                    type="button" 
+                    onClick={closeEditModal} 
+                    disabled={isSubmitting}
+                    className="px-5 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    취소
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className={`px-5 py-2 text-sm font-bold text-white rounded-lg shadow-sm transition-colors ${
+                      isSubmitting ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
+                    }`}
+                  >
+                    저장
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* 사유를 입력받는 삭제 전용 모달창 */}
       {isDeleteModalOpen && memberToDelete && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-40 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
             <div className="px-6 py-4 bg-red-50 border-b border-red-100 flex justify-between items-center">
               <h3 className="text-lg font-bold text-red-700">회원 삭제</h3>
-              {/* 닫을 때 데이터 초기화 */}
               <button
                 onClick={closeDeleteModal}
                 className="w-8 h-8 rounded-full bg-white border border-red-200 flex items-center justify-center font-bold text-red-500 hover:bg-red-100 transition-colors"
@@ -880,7 +1067,6 @@ export default function MemberManagementPage() {
             </div>
 
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex gap-2 justify-end">
-              {/* 취소할 때 데이터 초기화 */}
               <button
                 onClick={closeDeleteModal}
                 disabled={isSubmitting}
@@ -888,7 +1074,6 @@ export default function MemberManagementPage() {
               >
                 취소
               </button>
-              {/* 삭제 더블클릭 방지 */}
               <button
                 onClick={executeDelete}
                 disabled={isSubmitting}

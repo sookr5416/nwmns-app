@@ -24,6 +24,7 @@ interface Member {
   grade: string;
   role: string;
   created_at: string; 
+  att_reason?: string; // 🌟 비고 컬럼 추가
 }
 
 // 출석 통계 데이터 구조 인터페이스
@@ -32,8 +33,8 @@ interface ProcessedMember extends Member {
   attendedDates: string[];
 }
 
-// 정렬을 위한 타입 
-type SortField = 'name' | 'age' | 'gender' | 'grade' | 'created_at' | 'monthlyCount';
+// 🌟 정렬 필드에 att_reason 추가
+type SortField = 'name' | 'age' | 'gender' | 'grade' | 'created_at' | 'att_reason' | 'monthlyCount';
 type SortOrder = 'asc' | 'desc' | null;
 
 export default function MonthlyMemberAttendancePage() {
@@ -42,17 +43,17 @@ export default function MonthlyMemberAttendancePage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [allAttendances, setAllAttendances] = useState<AttendanceRecord[]>([]);
   
-  // 🌟 입력 중인 조회 조건 상태
+  // 입력 중인 조회 조건 상태 (조회 버튼을 누르기 전)
   const [inputMonth, setInputMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [inputName, setInputName] = useState<string>(''); 
   const [inputWarning, setInputWarning] = useState<boolean>(false); 
-  const [inputWarningCount, setInputWarningCount] = useState<number | string>(2); // 🌟 입력 중인 기준 횟수
+  const [inputWarningCount, setInputWarningCount] = useState<number | string>(2); 
 
-  // 🌟 실제로 적용된 조회 조건 상태 (조회 버튼 누른 후)
+  // 실제로 적용된 조회 조건 상태 (조회 버튼을 누른 후)
   const [selectedMonth, setSelectedMonth] = useState<string>(inputMonth);
   const [searchTerm, setSearchTerm] = useState<string>(''); 
   const [showWarningOnly, setShowWarningOnly] = useState<boolean>(false); 
-  const [warningCountThreshold, setWarningCountThreshold] = useState<number>(2); // 🌟 적용된 기준 횟수
+  const [warningCountThreshold, setWarningCountThreshold] = useState<number>(2); 
 
   // 정렬 상태
   const [sortField, setSortField] = useState<SortField | null>(null);
@@ -107,9 +108,10 @@ export default function MonthlyMemberAttendancePage() {
     
     if (attError) console.error('출석 데이터 조회 에러:', attError);
 
+    // 🌟 att_reason 항목 추가해서 Select
     const { data: memData, error: memError } = await supabase
       .from('members')
-      .select('id, name, age, gender, grade, role, created_at')
+      .select('id, name, age, gender, grade, role, created_at, att_reason')
       .eq('del_type', 'N')
       .order('name');
 
@@ -119,7 +121,7 @@ export default function MonthlyMemberAttendancePage() {
     if (attData) setAllAttendances(attData as unknown as AttendanceRecord[]);
   };
 
-  // 🌟 조회 버튼 클릭 시 실제 조건 적용
+  // 조회 버튼 클릭 시 실제 조건 적용
   const handleSearch = () => {
     if (!inputMonth) {
       return showPopup('alert', '입력 오류', '조회할 월을 선택해주세요.');
@@ -189,7 +191,7 @@ export default function MonthlyMemberAttendancePage() {
     });
   }, [members, allAttendances]);
 
-  // 🌟 다중 조건 필터링 및 정렬
+  // 다중 조건 필터링 및 정렬
   const filteredMembers = useMemo(() => {
     let result = processedMembers;
 
@@ -197,7 +199,6 @@ export default function MonthlyMemberAttendancePage() {
       result = result.filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()));
     }
 
-    // 🌟 커스텀 횟수 이하 필터 적용
     if (showWarningOnly) {
       result = result.filter(m => m.monthlyCount <= warningCountThreshold);
     }
@@ -211,6 +212,7 @@ export default function MonthlyMemberAttendancePage() {
         else if (sortField === 'age') { valA = a.age; valB = b.age; }
         else if (sortField === 'gender') { valA = a.gender; valB = b.gender; }
         else if (sortField === 'grade') { valA = a.grade; valB = b.grade; }
+        else if (sortField === 'att_reason') { valA = a.att_reason || ''; valB = b.att_reason || ''; } // 🌟 정렬 조건 추가
         else if (sortField === 'created_at') { valA = new Date(a.created_at).getTime(); valB = new Date(b.created_at).getTime(); }
         else if (sortField === 'monthlyCount') { valA = a.monthlyCount; valB = b.monthlyCount; }
 
@@ -299,7 +301,7 @@ export default function MonthlyMemberAttendancePage() {
             />
           </div>
 
-          {/* 🌟 지정 횟수 이하 참석자 조회 커스텀 체크박스 */}
+          {/* 지정 횟수 이하 참석자 조회 커스텀 체크박스 */}
           <div className="flex flex-col w-full sm:w-auto pb-0.5 sm:ml-auto">
             <label className="flex items-center gap-2 cursor-pointer bg-red-50 text-red-700 pl-3 pr-4 py-2 rounded-lg border border-red-100 hover:bg-red-100 transition-colors w-full sm:w-auto justify-center font-bold text-sm h-[38px]">
               <input 
@@ -313,7 +315,7 @@ export default function MonthlyMemberAttendancePage() {
                 min="0"
                 value={inputWarningCount}
                 onChange={(e) => setInputWarningCount(e.target.value === '' ? '' : Number(e.target.value))}
-                onClick={(e) => e.stopPropagation()} // 🌟 input 안쪽 클릭 시 체크박스 토글 방지
+                onClick={(e) => e.stopPropagation()} 
                 className="w-12 h-6 px-1 text-center bg-white border border-red-200 rounded text-red-700 focus:outline-none focus:ring-2 focus:ring-red-400 font-bold shadow-sm"
               />
               <span className="whitespace-nowrap">회 이하 참석자 보기</span>
@@ -367,6 +369,10 @@ export default function MonthlyMemberAttendancePage() {
                 <th onClick={() => handleSort('created_at')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                   가입일자 {sortField === 'created_at' && (sortOrder === 'asc' ? '▲' : '▼')}
                 </th>
+                {/* 🌟 비고 컬럼 추가 */}
+                <th onClick={() => handleSort('att_reason')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+                  비고 {sortField === 'att_reason' && (sortOrder === 'asc' ? '▲' : '▼')}
+                </th>
                 <th onClick={() => handleSort('monthlyCount')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                   월 참석 횟수 {sortField === 'monthlyCount' && (sortOrder === 'asc' ? '▲' : '▼')}
                 </th>
@@ -405,8 +411,11 @@ export default function MonthlyMemberAttendancePage() {
                   <td className="px-6 py-4 text-slate-600 text-sm font-medium">
                     {formatJoinDate(member.created_at)}
                   </td>
+                  {/* 🌟 비고 데이터 추가 */}
+                  <td className="px-6 py-4 text-slate-600 text-sm font-medium">
+                    {member.att_reason || '-'}
+                  </td>
                   <td className="px-6 py-4 font-bold text-slate-700">
-                    {/* 🌟 설정한 횟수 기준치 이하일 때만 빨간색으로 자동 하이라이트 연동 */}
                     <button
                       onClick={() => setSelectedMemberModal(member)}
                       title="상세 참석 날짜 보기"
@@ -425,7 +434,8 @@ export default function MonthlyMemberAttendancePage() {
               {/* 필터 결과가 없을 때 보여주는 빈 상태 */}
               {currentMembers.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center text-slate-400 font-medium">
+                  {/* 🌟 컬럼 추가로 인해 colSpan 7 -> 8 로 변경 */}
+                  <td colSpan={8} className="px-6 py-16 text-center text-slate-400 font-medium">
                     조건에 맞는 회원이 없습니다.
                   </td>
                 </tr>
@@ -435,7 +445,7 @@ export default function MonthlyMemberAttendancePage() {
         </div>
       </div>
 
-      {/* 페이지네이션 (페이지가 1개 초과일 때만 노출) */}
+      {/* 페이지네이션 */}
       {totalPages > 1 && (
         <div className="flex justify-center items-center gap-2 mt-6">
           <button 
