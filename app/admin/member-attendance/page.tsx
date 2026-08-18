@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../../lib/supabase';
-import CustomPopup, { PopupState } from '../../components/CustomPopup'; // 팝업 사용을 위해 추가
+import CustomPopup, { PopupState } from '../../components/CustomPopup'; 
 
 // 출석 데이터 구조 인터페이스
 interface AttendanceRecord {
@@ -42,28 +42,30 @@ export default function MonthlyMemberAttendancePage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [allAttendances, setAllAttendances] = useState<AttendanceRecord[]>([]);
   
-  // 입력 중인 조회 조건 상태 (조회 버튼을 누르기 전)
+  // 🌟 입력 중인 조회 조건 상태
   const [inputMonth, setInputMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [inputName, setInputName] = useState<string>(''); 
   const [inputWarning, setInputWarning] = useState<boolean>(false); 
+  const [inputWarningCount, setInputWarningCount] = useState<number | string>(2); // 🌟 입력 중인 기준 횟수
 
-  // 실제로 적용된 조회 조건 상태 (조회 버튼을 누른 후)
+  // 🌟 실제로 적용된 조회 조건 상태 (조회 버튼 누른 후)
   const [selectedMonth, setSelectedMonth] = useState<string>(inputMonth);
   const [searchTerm, setSearchTerm] = useState<string>(''); 
   const [showWarningOnly, setShowWarningOnly] = useState<boolean>(false); 
+  const [warningCountThreshold, setWarningCountThreshold] = useState<number>(2); // 🌟 적용된 기준 횟수
 
   // 정렬 상태
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
 
   // 페이징 처리 상태
-  const [currentPage, setCurrentPage] = useState<number>(1);    // 현재 페이지 번호
-  const [itemsPerPage, setItemsPerPage] = useState<number>(20); // 한 페이지당 보여줄 목록 개수
+  const [currentPage, setCurrentPage] = useState<number>(1);    
+  const [itemsPerPage, setItemsPerPage] = useState<number>(20); 
 
   // 모달(팝업) 상태
   const [selectedMemberModal, setSelectedMemberModal] = useState<ProcessedMember | null>(null);
 
-  // 공통 팝업 상태 (월 미입력 시 경고창 띄우기 용도)
+  // 공통 팝업 상태 
   const [popup, setPopup] = useState<PopupState>({
     isOpen: false,
     type: 'alert',
@@ -77,28 +79,25 @@ export default function MonthlyMemberAttendancePage() {
   };
   const closePopup = () => setPopup(prev => ({ ...prev, isOpen: false }));
 
-  // 조회 월(selectedMonth)이 변경될 때마다 데이터를 다시 불러옴
+  // 데이터 리패치 이펙트
   useEffect(() => {
     fetchData();
   }, [selectedMonth]);
 
-  // 검색어, 필터 조건, 페이지당 개수 등이 적용되면 항상 1페이지로 돌아감
+  // 검색 조건 등 변경 시 1페이지로 이동
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedMonth, searchTerm, showWarningOnly, itemsPerPage]);
+  }, [selectedMonth, searchTerm, showWarningOnly, warningCountThreshold, itemsPerPage]);
 
   const fetchData = async () => {
     if (!selectedMonth) return;
 
-    // 선택된 월의 1일과 마지막 일자를 계산
     const year = parseInt(selectedMonth.split('-')[0]);
     const month = parseInt(selectedMonth.split('-')[1]);
     const startDate = `${selectedMonth}-01`;
 
-    // 다음 달의 0일째를 구하면 이번 달의 마지막 날짜를 얻을 수 있음
     const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
-    // Supabase의 기본 1,000건 응답 제한을 우회하기 위해, 해당 월에 속한 데이터만 조회
     const { data: attData, error: attError } = await supabase
       .from('attendances')
       .select('id, gathering_id, attended_date, members(id, name)')
@@ -108,7 +107,6 @@ export default function MonthlyMemberAttendancePage() {
     
     if (attError) console.error('출석 데이터 조회 에러:', attError);
 
-    // 삭제되지 않은 회원만 조회
     const { data: memData, error: memError } = await supabase
       .from('members')
       .select('id, name, age, gender, grade, role, created_at')
@@ -121,9 +119,8 @@ export default function MonthlyMemberAttendancePage() {
     if (attData) setAllAttendances(attData as unknown as AttendanceRecord[]);
   };
 
-  // 조회 버튼 클릭 시 입력값을 실제 조건으로 적용
+  // 🌟 조회 버튼 클릭 시 실제 조건 적용
   const handleSearch = () => {
-    // 월 값이 비어있을 경우 경고창 출력 후 중단
     if (!inputMonth) {
       return showPopup('alert', '입력 오류', '조회할 월을 선택해주세요.');
     }
@@ -131,13 +128,13 @@ export default function MonthlyMemberAttendancePage() {
     setSelectedMonth(inputMonth);
     setSearchTerm(inputName);
     setShowWarningOnly(inputWarning);
+    // 빈 값이면 0으로 처리, 아니면 숫자 변환
+    setWarningCountThreshold(inputWarningCount === '' ? 0 : Number(inputWarningCount));
     setCurrentPage(1);
   };
 
-  // 검색 필터 적용 중인지 확인 (결과 건수 표시에 사용)
   const hasActiveFilter = searchTerm !== '' || showWarningOnly;
 
-  // 생년월일 포맷 (YY.MM.DD)
   const formatDOB = (dobStr: string) => {
     if (!dobStr) return '-';
     const clean = dobStr.replace(/[^0-9]/g, ''); 
@@ -145,7 +142,6 @@ export default function MonthlyMemberAttendancePage() {
     return dobStr;
   };
 
-  // 가입일자 포맷 (YY.MM.DD)
   const formatJoinDate = (dateStr: string) => {
     if (!dateStr) return '-';
     const date = new Date(dateStr);
@@ -153,14 +149,12 @@ export default function MonthlyMemberAttendancePage() {
     return `${String(date.getFullYear()).substring(2,4)}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
   };
 
-  // 날짜를 받아 한글 요일 반환
   const getDayOfWeek = (dateStr: string) => {
     const days = ['일', '월', '화', '수', '목', '금', '토'];
     const date = new Date(dateStr);
     return days[date.getDay()];
   };
 
-  // 정렬 함수
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       if (sortOrder === 'asc') setSortOrder('desc');
@@ -174,21 +168,17 @@ export default function MonthlyMemberAttendancePage() {
     }
   };
 
-  // 개인별 출석 통계 계산
   const processedMembers = useMemo<ProcessedMember[]>(() => {
     return members.map(member => {
       
-      // 해당 회원의 이번 달 출석 기록만 필터링
       const monthAttendances = allAttendances.filter(
         a => a.members && (a as any).members.id === member.id
       );
 
-      // 날짜 문자열만 추출 후 시간 오름차순으로 정렬
       const attendedDates = monthAttendances
         .map(a => a.attended_date.substring(0, 10))
         .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
 
-      // 중복 제거
       const uniqueAttendedDates = Array.from(new Set(attendedDates));
 
       return {
@@ -199,21 +189,19 @@ export default function MonthlyMemberAttendancePage() {
     });
   }, [members, allAttendances]);
 
-  // 가공된 데이터에 검색어, 필터조건, 정렬 적용
+  // 🌟 다중 조건 필터링 및 정렬
   const filteredMembers = useMemo(() => {
     let result = processedMembers;
 
-    // 이름 검색 필터
     if (searchTerm) {
       result = result.filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()));
     }
 
-    // 출석 경고자 (2회 이하) 필터
+    // 🌟 커스텀 횟수 이하 필터 적용
     if (showWarningOnly) {
-      result = result.filter(m => m.monthlyCount <= 2);
+      result = result.filter(m => m.monthlyCount <= warningCountThreshold);
     }
 
-    // 목록 정렬 로직 (클릭한 헤더에 맞춰 정렬)
     result.sort((a, b) => {
       if (sortField && sortOrder) {
         let valA: any = '';
@@ -231,7 +219,6 @@ export default function MonthlyMemberAttendancePage() {
         return 0;
       }
 
-      // 기본 정렬: 직책 및 가입일자 순
       const getRoleRank = (role: string) => {
         if (role === '모임장') return 1;
         if (role === '운영진') return 2;
@@ -241,12 +228,10 @@ export default function MonthlyMemberAttendancePage() {
       const rankA = getRoleRank(a.role);
       const rankB = getRoleRank(b.role);
 
-      // 직책이 다르면 직책 우선순위로 정렬
       if (rankA !== rankB) {
         return rankA - rankB;
       }
 
-      // 직책이 같으면 가입일 순으로 정렬 (오름차순)
       const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
       const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
 
@@ -254,13 +239,12 @@ export default function MonthlyMemberAttendancePage() {
     });
 
     return result;
-  }, [processedMembers, searchTerm, showWarningOnly, sortField, sortOrder]);
+  }, [processedMembers, searchTerm, showWarningOnly, warningCountThreshold, sortField, sortOrder]);
 
   const totalPages = Math.ceil(filteredMembers.length / itemsPerPage) || 1;             
   const startIndex = (currentPage - 1) * itemsPerPage;                                  
   const currentMembers = filteredMembers.slice(startIndex, startIndex + itemsPerPage);  
 
-  // 페이지 이동 핸들러
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
@@ -315,16 +299,24 @@ export default function MonthlyMemberAttendancePage() {
             />
           </div>
 
-          {/* sm:ml-auto 를 추가하여 맨 우측으로 밀어냄 */}
+          {/* 🌟 지정 횟수 이하 참석자 조회 커스텀 체크박스 */}
           <div className="flex flex-col w-full sm:w-auto pb-0.5 sm:ml-auto">
-            <label className="flex items-center gap-2 cursor-pointer bg-red-50 text-red-700 px-4 py-2 rounded-lg border border-red-100 hover:bg-red-100 transition-colors w-full sm:w-auto justify-center font-bold text-sm h-[38px]">
+            <label className="flex items-center gap-2 cursor-pointer bg-red-50 text-red-700 pl-3 pr-4 py-2 rounded-lg border border-red-100 hover:bg-red-100 transition-colors w-full sm:w-auto justify-center font-bold text-sm h-[38px]">
               <input 
                 type="checkbox" 
                 checked={inputWarning}
                 onChange={(e) => setInputWarning(e.target.checked)}
                 className="w-4 h-4 text-red-600 rounded border-red-300 focus:ring-red-500 cursor-pointer"
               />
-              2회 이하 참석자만 보기
+              <input 
+                type="number"
+                min="0"
+                value={inputWarningCount}
+                onChange={(e) => setInputWarningCount(e.target.value === '' ? '' : Number(e.target.value))}
+                onClick={(e) => e.stopPropagation()} // 🌟 input 안쪽 클릭 시 체크박스 토글 방지
+                className="w-12 h-6 px-1 text-center bg-white border border-red-200 rounded text-red-700 focus:outline-none focus:ring-2 focus:ring-red-400 font-bold shadow-sm"
+              />
+              <span className="whitespace-nowrap">회 이하 참석자 보기</span>
             </label>
           </div>
         </div>
@@ -414,11 +406,12 @@ export default function MonthlyMemberAttendancePage() {
                     {formatJoinDate(member.created_at)}
                   </td>
                   <td className="px-6 py-4 font-bold text-slate-700">
+                    {/* 🌟 설정한 횟수 기준치 이하일 때만 빨간색으로 자동 하이라이트 연동 */}
                     <button
                       onClick={() => setSelectedMemberModal(member)}
                       title="상세 참석 날짜 보기"
                       className={`inline-flex items-center justify-center w-8 h-8 rounded-full hover:opacity-80 transition-opacity ring-1 ring-inset ${
-                        member.monthlyCount <= 2 
+                        member.monthlyCount <= warningCountThreshold 
                           ? 'bg-red-50 text-red-600 ring-red-200 hover:bg-red-100' 
                           : 'bg-indigo-50 text-indigo-700 ring-indigo-200 hover:bg-indigo-100'
                       }`}
