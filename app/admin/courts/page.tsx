@@ -52,7 +52,17 @@ export default function AdminCourtsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // 선수들 간 같이 뛴 횟수를 추적하는 객체 (중복 매칭 경고용)
-  const [pairCounts, setPairCounts] = useState<Record<string, Record<string, number>>>({});
+  const [pairCounts, setPairCounts] = useState<Record<string, Record<string, number>>>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('todayPairCounts');
+      if (saved) return JSON.parse(saved);
+    }
+    return {};
+  });
+
+  useEffect(() => {
+    localStorage.setItem('todayPairCounts', JSON.stringify(pairCounts));
+  }, [pairCounts]);
 
   // 공통 팝업 상태
   const [popup, setPopup] = useState<PopupState>({
@@ -338,7 +348,7 @@ export default function AdminCourtsPage() {
     }
   };
 
-  // 🌟 [추가 기능] 대기 코트 선수들을 특정 게임 코트로 단체 이동 & 대기 순번 자동 당기기
+  // [추가 기능] 대기 코트 선수들을 특정 게임 코트로 단체 이동 & 대기 순번 자동 당기기
   const handleMoveTeam = async (fromSlotId: string, toSlotId: string) => {
     const targetCourt = courts.find(c => c.id === toSlotId);
     const playersToMove = players.filter(p => p.status === fromSlotId);
@@ -567,6 +577,8 @@ export default function AdminCourtsPage() {
 
           await supabase.from('players').delete().neq("id", '0');
           setPlayers([]);
+          setPairCounts({});
+          localStorage.removeItem('todayPairCounts');
           
           showPopup('alert', '마감 완료', '성공적으로 데이터 전송 및 마감이 완료되었습니다.\n이제 이동하셔도 됩니다.');
         } catch (innerError) {

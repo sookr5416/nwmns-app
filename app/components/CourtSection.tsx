@@ -55,7 +55,6 @@ export default function CourtSection({
         </div>
       </div>
       
-      {/* 🌟 모바일(기본) grid-cols-2 로 변경, 간격(gap)도 모바일에선 좁게(gap-3) 설정 */}
       <div className={`grid gap-3 md:gap-6 ${viewMode === 'user' ? 'grid-cols-2 lg:grid-cols-4 max-w-7xl mx-auto w-full' : 'grid-cols-2 xl:grid-cols-4'}`}>
         {[...courts]
           .sort((a, b) => {
@@ -76,7 +75,7 @@ export default function CourtSection({
             return (
               <div key={slot.id} className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden transition-all hover:shadow-md">
                 
-                {/* 🌟 헤더 영역: 모바일 폰트 및 패딩 축소 */}
+                {/* 헤더 영역 */}
                 <div className={`${isGameCourt ? 'bg-slate-800' : isLesson ? 'bg-emerald-600' : isEnd ? 'bg-red-500' : 'bg-indigo-500'} px-2.5 md:px-3.5 py-2 md:py-2.5 flex items-center justify-between gap-1.5 md:gap-2`}>
                   <div className="flex items-center gap-1 min-w-0 flex-1">
                     {viewMode === 'admin' && isGameCourt && handleCourtRenameChange && handleCourtRenameSave ? (
@@ -109,7 +108,7 @@ export default function CourtSection({
                   </div>
                 </div>
 
-                {/* 🌟 명단 드롭 영역: 모바일 패딩 축소 */}
+                {/* 명단 드롭 영역 */}
                 <div 
                   className={`flex-1 p-2 md:p-4 flex flex-col gap-1.5 md:gap-2 min-h-[160px] md:min-h-[240px] ${slotPlayers.length === 0 ? 'justify-center items-center' : ''} ${selectedPlayerId ? 'cursor-pointer hover:bg-indigo-50/50' : ''}`}
                   onDragOver={viewMode === 'admin' && handleDragOver ? handleDragOver : undefined}
@@ -123,12 +122,19 @@ export default function CourtSection({
                   ) : (
                     slotPlayers.map(p => {
                       
-                      const hasDuplicatePair = slotPlayers.some(other => {
-                        if (other.id === p.id) return false;
-                        const countA = pairCounts?.[p.id]?.[other.id] || 0;
-                        const countB = pairCounts?.[other.id]?.[p.id] || 0;
-                        return countA > 2 && countB > 2;
-                      });
+                      // 같이 뛴 사람 색출
+                      const duplicateNames = slotPlayers
+                        .filter(other => {
+                          if (other.id === p.id) return false;
+                          const count = pairCounts?.[p.id]?.[other.id] || 0;
+                          return count >= 2; // 2번 이상 같이 뛰었다면 경고
+                        })
+                        .map(other => other.name);
+
+                      // 최대 2명까지만 텍스트로 보여주고 넘어가면 '외 N' 처리
+                      const displayWarningText = duplicateNames.length > 2 
+                        ? `⚠️ ${duplicateNames.slice(0, 2).join(', ')} 외 ${duplicateNames.length - 2}` 
+                        : `⚠️ ${duplicateNames.join(', ')}`;
 
                       return (
                         <div 
@@ -145,9 +151,13 @@ export default function CourtSection({
                           <span className="font-bold text-slate-800 text-xs md:text-sm truncate mr-1">{p.name}</span>
 
                           <div className="flex items-center gap-1 md:gap-1.5 shrink-0">
-                            {hasDuplicatePair && (
-                              <span className="text-red-500 text-[10px] md:text-xs font-bold md:ml-2">
-                                ⚠️ 중복
+                            {/* 중복된 사람의 이름 표시 (2명 초과시 축약) */}
+                            {duplicateNames.length > 0 && (
+                              <span 
+                                className="text-red-500 text-[10px] md:text-xs font-bold md:ml-2 truncate max-w-[80px] md:max-w-[110px]"
+                                title={`이미 2회 이상 같이 게임을 진행했습니다: ${duplicateNames.join(', ')}`}
+                              >
+                                {displayWarningText}
                               </span>
                             )}
 
@@ -161,7 +171,7 @@ export default function CourtSection({
                   )}
                 </div>
 
-                {/* 🌟 하단 버튼 영역: 모바일 폰트 및 여백 축소 */}
+                {/* 하단 버튼 영역 */}
                 {viewMode === 'admin' && resetSlot && finishGame && startGame && (
                   <div className="p-2.5 md:p-4 border-t border-slate-100 flex flex-col gap-1.5 md:gap-2 bg-slate-50 mt-auto" onClick={(e) => e.stopPropagation()}>
                     <div className="flex gap-1.5 md:gap-2">
