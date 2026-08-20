@@ -7,7 +7,7 @@ import LobbyPanel from '../../components/LobbyPanel';
 import CourtSection from '../../components/CourtSection';
 import CustomPopup, { PopupState } from '../../components/CustomPopup';
 
-// DB에서 불러오는 회원 정보 타입 정의
+// 회원 데이터 구조 인터페이스
 interface DbMember {
   id: string;
   name: string;
@@ -20,16 +20,16 @@ interface DbMember {
 
 export default function AdminCourtsPage() {
   // UI 상태 관리
-  const [isRegOpen, setIsRegOpen] = useState(false);                                // 게스트 등록 폼 열림/닫힘 상태
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);    // 현재 선택된 선수 ID
-  const [isMemberPopupOpen, setIsMemberPopupOpen] = useState(false);                // 회원 불러오기 팝업 열림/닫힘 선택
-  const [memberSearchTerm, setMemberSearchTerm] = useState('');                     // 회원 검색어
-  const [isEditingInfo, setIsEditingInfo] = useState(false);                        // 정모 정보 (장소, 시간 등) 수정 모드 여부
+  const [isRegOpen, setIsRegOpen] = useState(false);                                
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);    
+  const [isMemberPopupOpen, setIsMemberPopupOpen] = useState(false);                
+  const [memberSearchTerm, setMemberSearchTerm] = useState('');                     
+  const [isEditingInfo, setIsEditingInfo] = useState(false);                        
   
   // 데이터 상태 관리
-  const [players, setPlayers] = useState<Player[]>([]);                             // 현재 출석하여 로비나 코트에 있는 전체 선수 목록
-  const [dbMembers, setDbMembers] = useState<DbMember[]>([]);                       // DB에 등록된 정회원 목록 전체
-  const [courts, setCourts] = useState<Court[]>([]);                                // 생성된 코트 목록 (게임용, 대기용, 레슨용 등)
+  const [players, setPlayers] = useState<Player[]>([]);                             
+  const [dbMembers, setDbMembers] = useState<DbMember[]>([]);                       
+  const [courts, setCourts] = useState<Court[]>([]);                                
   
   // 신규 게스트 등록 폼 상태
   const [name, setName] = useState<string>('');
@@ -43,10 +43,10 @@ export default function AdminCourtsPage() {
   const [memoTitle, setMemoTitle] = useState('정기 정모');
   
   // 시스템 및 타이머 관련 상태
-  const nameInputRef = useRef<HTMLInputElement>(null);                              // 이름 입력칸에 포커스를 주기 위한 Ref
-  const [now, setNow] = useState(Date.now());                                       // 실시간 타이머 (1초마다 갱신)
-  const [processingCourtId, setProcessingCourtId] = useState<string | null>(null);  // 현재 경기 종료 처리 중인 코트 ID
-  const isFinishingRef = useRef<Record<string, boolean>>({});                       // 코트별 중복 종료 방지용 Ref (빠른 클릭 방지)
+  const nameInputRef = useRef<HTMLInputElement>(null);                              
+  const [now, setNow] = useState(Date.now());                                       
+  const [processingCourtId, setProcessingCourtId] = useState<string | null>(null);  
+  const isFinishingRef = useRef<Record<string, boolean>>({});                       
 
   // 데이터 전송 로딩 상태 (이탈 방지용)
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -70,37 +70,32 @@ export default function AdminCourtsPage() {
 
   const closePopup = () => setPopup(prev => ({ ...prev, isOpen: false }));
 
-  // 1초마다 실시간 시간 갱신 (경기 타이머 및 휴식 시간 계산용)
+  // 1초마다 실시간 시간 갱신
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // 최초 랜더링 시 데이터 세팅 및 실시간 DB 구독 (Realtime)
+  // 최초 랜더링 시 데이터 세팅 및 실시간 DB 구독
   useEffect(() => {
     fetchPlayers();
     fetchCourts();
     fetchDbMembers();
     
-    // 다른 기기에서 선수를 수정하면 내 화면도 실시간 갱신
     const playersubscription = supabase.channel('players_channel')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, () => { fetchPlayers(); }).subscribe();
 
-    // 다른 기기에서 코트를 수정하면 내 화면도 실시간 갱신
     const courtSubscription = supabase.channel('courts_channel')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'courts' }, () => { fetchCourts(); }).subscribe();
 
     return () => { supabase.removeChannel(playersubscription); supabase.removeChannel(courtSubscription); };
   }, []);
 
-  // 당일 참석 선수 목록 가져오기
   const fetchPlayers = async () => {
-    const { data } = await supabase.from('players').select('*');
-    
+    const { data } = await supabase.from('players').select('*').order('id', { ascending: true });
     if (data) setPlayers(data);
   };
 
-  // 코트 목록 가져오기 및 정렬 (게임 → 대기 → 레슨 순)
   const fetchCourts = async () => {
     const { data } = await supabase.from('courts').select('*');
     if (data) {
@@ -112,7 +107,6 @@ export default function AdminCourtsPage() {
     }
   };
 
-  // 기존 정회원 목록 가져오기 (운영진 최상단, 가입일순 정렬)
   const fetchDbMembers = async () => {
     const { data } = await supabase
       .from('members')
@@ -121,38 +115,28 @@ export default function AdminCourtsPage() {
     
     if (data) {
       const membersData = data as DbMember[];
-      
-      // 정렬: 1순위 모임장/운영진, 2순위 가입일자 오름차순
       membersData.sort((a, b) => {
         const getRoleRank = (role: string) => {
           if (role === '모임장') return 1;
           if (role === '운영진') return 2;
           return 3; 
         };
-
         const rankA = getRoleRank(a.role);
         const rankB = getRoleRank(b.role);
-
-        if (rankA !== rankB) {
-          return rankA - rankB;
-        }
-
+        if (rankA !== rankB) return rankA - rankB;
+        
         const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
         const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-
         return dateA - dateB;
       });
-
       setDbMembers(membersData);
     }
   };
 
-  // 타이머 시간 포맷 변환 (밀리초 → 00:00 형식)
   const formatTime = (startTime: number) => {
     const diff = Math.floor((now - startTime) / 1000);
     const m = String(Math.floor(diff / 60)).padStart(2, '0');
     const s = String(diff % 60).padStart(2, '0');
-    
     return `${m}:${s}`;
   };
 
@@ -161,16 +145,19 @@ export default function AdminCourtsPage() {
      setCourts(courts.map(c => c.id === id ? { ...c, title: newTitle } : c)); 
   };
 
-  // 코트 이름 DB 저장 (포커스 잃었을 때)
+  // [Rollback 추가] 코트 이름 DB 저장
   const handleCourtRenameSave = async (id: string, newTitle: string) => {
     if (!newTitle.trim()) { fetchCourts(); return; }
-    await supabase.from('courts').update({ title: newTitle }).eq('id', id);
+    const { error } = await supabase.from('courts').update({ title: newTitle }).eq('id', id);
+    if (error) {
+      showPopup('alert', '오류', '코트 이름 수정에 실패했습니다. 네트워크를 확인해주세요.');
+      fetchCourts(); // 원래 데이터로 복구
+    }
   };
 
-  // 새로운 게임 코트 추가 함수
+  // [Rollback 추가] 새로운 게임 코트 추가
   const handleAddGameCourt = async () => {
     const gameCourts = courts.filter(c => c.type === 'game');
-    
     if (gameCourts.length >= 8) {
       return showPopup('alert', '알림', '게임 코트는 최대 8개까지만 추가할 수 있습니다.');
     }
@@ -181,33 +168,38 @@ export default function AdminCourtsPage() {
     const maxOrder = Math.max(...courts.map(c => c.order_idx || 0), 0);
     const newCourt: Court = { id: newCourtId, title: newCourtTitle, type: 'game', order_idx: maxOrder + 1, start_time: null };
 
-    setCourts([...courts, newCourt]);
-    await supabase.from('courts').insert([newCourt]);
+    const previousCourts = [...courts]; // 백업
+    setCourts([...courts, newCourt]); // 화면 선반영
+
+    const { error } = await supabase.from('courts').insert([newCourt]);
+    if (error) {
+      setCourts(previousCourts); // 롤백
+      showPopup('alert', '오류', '코트 추가에 실패했습니다. 네트워크를 확인해주세요.');
+    }
   };
 
-  // 기존 게임 코트 삭제 함수
+  // [Rollback 추가] 기존 게임 코트 삭제
   const handleDeleteGameCourt = async (courtId: string) => {
     const gameCourts = courts.filter(c => c.type === 'game');
+    if (gameCourts.length <= 2) return showPopup('alert', '알림', '게임 코트는 최소 2개 이상 유지되어야 합니다.');
     
-    if (gameCourts.length <= 2) {
-      return showPopup('alert', '알림', '게임 코트는 최소 2개 이상 유지되어야 합니다.');
-    }
     const targetCourt = courts.find(c => c.id === courtId);
+    if (targetCourt?.start_time) return showPopup('alert', '알림', '현재 경기가 진행 중인 코트는 삭제할 수 없습니다.');
     
-    if (targetCourt?.start_time) {
-      return showPopup('alert', '알림', '현재 경기가 진행 중인 코트는 삭제할 수 없습니다.');
-    }
     const playersInCourt = players.filter(p => p.status === courtId);
-    
-    if (playersInCourt.length > 0) {
-      return showPopup('alert', '알림', `해당 코트에 선수가 ${playersInCourt.length}명 등록되어 있어 삭제할 수 없습니다. 선수를 먼저 비워주세요.`);
-    }
+    if (playersInCourt.length > 0) return showPopup('alert', '알림', `해당 코트에 선수가 ${playersInCourt.length}명 등록되어 있어 삭제할 수 없습니다.`);
 
-    setCourts(courts.filter(c => c.id !== courtId));
-    await supabase.from('courts').delete().eq('id', courtId);
+    const previousCourts = [...courts]; // 백업
+    setCourts(courts.filter(c => c.id !== courtId)); // 화면 선반영
+
+    const { error } = await supabase.from('courts').delete().eq('id', courtId);
+    if (error) {
+      setCourts(previousCourts); // 롤백
+      showPopup('alert', '오류', '코트 삭제에 실패했습니다. 네트워크를 확인해주세요.');
+    }
   };
 
-  // 게스트 신규 등록 (현장 등록)
+  // [Rollback 추가] 게스트 신규 등록
   const handleRegister = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!name.trim() || !age.trim()) return showPopup('alert', '입력 오류', '이름과 출생년도를 입력해주세요.');
@@ -219,9 +211,16 @@ export default function AdminCourtsPage() {
 
     const addNewPlayer = async () => {
       const newPlayer: Player = { id: Date.now().toString(), name: name.trim(), age, gender, grade, count: 0, status: 'lobby', role: 'guest'};
-      setPlayers(prev => [...prev, newPlayer]);
+      
+      const previousPlayers = [...players]; // 백업
+      setPlayers(prev => [...prev, newPlayer]); // 화면 선반영
       setName(''); setAge(''); nameInputRef.current?.focus();
-      await supabase.from('players').insert([newPlayer]);
+      
+      const { error } = await supabase.from('players').insert([newPlayer]);
+      if (error) {
+        setPlayers(previousPlayers); // 롤백
+        showPopup('alert', '오류', '게스트 등록에 실패했습니다. 네트워크를 확인해주세요.');
+      }
     };
 
     if (isExistingMember) {
@@ -234,38 +233,48 @@ export default function AdminCourtsPage() {
     }
   };
 
-  // 정회원 목록에서 로비로 불러오기 (출석체크)
+  // [Rollback 추가] 정회원 목록에서 로비로 불러오기
   const handleAddMemberToLobby = async (member: DbMember) => {
     const newPlayer: Player = { 
       id: Date.now().toString() + Math.floor(Math.random() * 1000), 
-      name: member.name, 
-      age: member.age, 
-      gender: member.gender, 
-      grade: member.grade, 
-      count: 0, 
-      status: 'lobby',
-      role: member.role
+      name: member.name, age: member.age, gender: member.gender, grade: member.grade, count: 0, status: 'lobby', role: member.role
     };
-    setPlayers(prev => [...prev, newPlayer]);
-    await supabase.from('players').insert([newPlayer]);
+    
+    const previousPlayers = [...players]; // 백업
+    setPlayers(prev => [...prev, newPlayer]); // 화면 선반영
+    
+    const { error } = await supabase.from('players').insert([newPlayer]);
+    if (error) {
+      setPlayers(previousPlayers); // 롤백
+      showPopup('alert', '오류', '회원 불러오기에 실패했습니다. 네트워크를 확인해주세요.');
+    }
   };
 
-  // 참석 취소 (목록에서 완전히 제거)
+  // [Rollback 추가] 참석 취소 (완전 삭제) 통합 함수
+  const executeDelete = async (id: string) => {
+    const previousPlayers = [...players]; // 백업
+    setPlayers(players.filter(p => p.id !== id)); // 화면 선반영
+    
+    const { error } = await supabase.from('players').delete().eq('id', id);
+    if (error) {
+      setPlayers(previousPlayers); // 롤백
+      showPopup('alert', '오류', '참석 취소 처리에 실패했습니다. 네트워크를 확인해주세요.');
+    }
+  };
+
   const handleDelete = async (id: string) => {
     const targetPlayer = players.find(p => p.id === id);
     if (targetPlayer && targetPlayer.count >= 1) {
       showPopup('confirm', '선수 삭제', `이미 ${targetPlayer.count}게임을 진행했습니다. 삭제하시겠습니까?`, async () => {
         closePopup();
-        setPlayers(players.filter(p => p.id !== id));
-        await supabase.from('players').delete().eq('id', id);
+        await executeDelete(id);
       });
       return;
     }
-    setPlayers(players.filter(p => p.id !== id));
-    await supabase.from('players').delete().eq('id', id);
+    await executeDelete(id);
   };
 
-  // 드래그 시작 함수
+  // 드래그 시작
   const handleDragStart = (e: DragEvent<HTMLElement>, playerId: string) => {
     const player = players.find(p => p.id === playerId);
     const playerCourt = courts.find(c => c.id === player?.status);
@@ -273,10 +282,9 @@ export default function AdminCourtsPage() {
     e.dataTransfer.setData('playerId', playerId);
   };
 
-  // 드래그 중인 아이템이 위를 지날 때 기본 이벤트 방지 (필수)
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); };
 
-  // 드래그 종료 시 함수 (코트에 배정)
+  // [Rollback 추가] 드래그 앤 드롭으로 배정
   const handleDrop = async (e: DragEvent<HTMLDivElement>, targetSlotId: string) => {
     e.preventDefault();
     const playerId = e.dataTransfer.getData('playerId');
@@ -285,16 +293,20 @@ export default function AdminCourtsPage() {
     if (!currentPlayer || currentPlayer.status === targetSlotId) return;
     const targetCourt = courts.find(c => c.id === targetSlotId);
     
-    // 코트 4명 초과 검사 (로비와 레슨 코트는 예외)
     if (targetSlotId !== 'lobby' && targetCourt?.type !== 'lesson' && players.filter(p => p.status === targetSlotId).length >= 4) {
       return showPopup('alert', '배정 불가', '최대 4명입니다.');
     }
 
-    setPlayers(players.map(p => p.id === playerId ? { ...p, status: targetSlotId } : p));
-    await supabase.from('players').update({ status: targetSlotId }).eq('id', playerId);
+    const previousPlayers = [...players]; // 백업
+    setPlayers(players.map(p => p.id === playerId ? { ...p, status: targetSlotId } : p)); // 화면 선반영
+    
+    const { error } = await supabase.from('players').update({ status: targetSlotId }).eq('id', playerId);
+    if (error) {
+      setPlayers(previousPlayers); // 롤백
+      showPopup('alert', '오류', '코트 이동에 실패했습니다. 네트워크를 확인해주세요.');
+    }
   };
 
-  // 모바일 클릭 환경을 위한 클릭 배정 (선수 클릭 → 코트 클릭)
   const handlePlayerClick = (playerId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const player = players.find(p => p.id === playerId);
@@ -303,38 +315,74 @@ export default function AdminCourtsPage() {
     setSelectedPlayerId(prev => (prev === playerId ? null : playerId));
   };
 
+  // [Rollback 추가] 클릭으로 배정
   const handleSlotClick = async (targetSlotId: string) => {
     if (!selectedPlayerId) return;
     const playerId = selectedPlayerId;
     const currentPlayer = players.find(p => p.id === playerId);
     if (!currentPlayer || currentPlayer.status === targetSlotId) { setSelectedPlayerId(null); return; }
+    
     const targetCourt = courts.find(c => c.id === targetSlotId);
     if (targetSlotId !== 'lobby' && targetCourt?.type !== 'lesson' && players.filter(p => p.status === targetSlotId).length >= 4) {
       showPopup('alert', '배정 불가', '최대 4명입니다.'); setSelectedPlayerId(null); return;
     }
-    setPlayers(players.map(p => p.id === playerId ? { ...p, status: targetSlotId } : p));
+    
+    const previousPlayers = [...players]; // 백업
+    setPlayers(players.map(p => p.id === playerId ? { ...p, status: targetSlotId } : p)); // 화면 선반영
     setSelectedPlayerId(null); 
-    await supabase.from('players').update({ status: targetSlotId }).eq('id', playerId);
+    
+    const { error } = await supabase.from('players').update({ status: targetSlotId }).eq('id', playerId);
+    if (error) {
+      setPlayers(previousPlayers); // 롤백
+      showPopup('alert', '오류', '코트 이동에 실패했습니다. 네트워크를 확인해주세요.');
+    }
   };
 
-  // 코트에 배정된 선수를 다시 로비로 되돌리기 (초기화)
+  // [Rollback 추가] 초기화 (선수들 로비로 튕겨내기)
   const resetSlot = async (slotId: string) => {
-    const updatedPlayers = players.map(p => p.status === slotId ? { ...p, status: 'lobby' } : p);
-    setPlayers(updatedPlayers);
-    await supabase.from('courts').update({ start_time: null }).eq('id', slotId);
+    const previousPlayers = [...players];
+    const previousCourts = [...courts];
     
-    const changed = updatedPlayers.filter((p, i) => p.status !== players[i].status);
-    if (changed.length > 0) await supabase.from('players').upsert(changed);
+    const updatedPlayers = players.map(p => p.status === slotId ? { ...p, status: 'lobby' } : p);
+    
+    // 화면 선반영
+    setPlayers(updatedPlayers);
+    setCourts(courts.map(c => c.id === slotId ? { ...c, start_time: null } : c));
+    
+    try {
+      const { error: courtError } = await supabase.from('courts').update({ start_time: null }).eq('id', slotId);
+      if (courtError) throw courtError;
+      
+      const changed = updatedPlayers.filter((p, i) => p.status !== players[i].status);
+      if (changed.length > 0) {
+        const { error: playersError } = await supabase.from('players').upsert(changed);
+        if (playersError) throw playersError;
+      }
+    } catch (error) {
+      setPlayers(previousPlayers); // 롤백
+      setCourts(previousCourts); // 롤백
+      showPopup('alert', '오류', '코트 초기화에 실패했습니다. 네트워크를 확인해주세요.');
+    }
   };
   
-  // 경기 시작 (타이머 작동)
+  // [Rollback 추가] 경기 시작
   const startGame = async (slotId: string) => {
     if (players.filter(p => p.status === slotId).length !== 4) return showPopup('alert', '시작 불가', '4명이 모여야 시작할 수 있습니다.');
     setSelectedPlayerId(null);
-    await supabase.from('courts').update({ start_time: Date.now() }).eq('id', slotId);
+    
+    const previousCourts = [...courts];
+    const nowTime = Date.now();
+    
+    setCourts(courts.map(c => c.id === slotId ? { ...c, start_time: nowTime } : c)); // 화면 선반영 타이머 작동
+    
+    const { error } = await supabase.from('courts').update({ start_time: nowTime }).eq('id', slotId);
+    if (error) {
+      setCourts(previousCourts); // 롤백
+      showPopup('alert', '오류', '경기 시작에 실패했습니다. 네트워크를 확인해주세요.');
+    }
   };
 
-  // 경기 종료 (선수들 로비로 복귀, 경기수 증가, 휴식 타이머 시작)
+  // [Rollback 추가] 경기 종료 로직
   const finishGame = async (slotId: string) => {
     if (isFinishingRef.current[slotId]) return;
     const court = courts.find(c => c.id === slotId);
@@ -343,12 +391,15 @@ export default function AdminCourtsPage() {
     isFinishingRef.current[slotId] = true;
     setProcessingCourtId(slotId);
 
+    const previousCourts = [...courts];
+    const previousPlayers = [...players];
+    const previousPairCounts = { ...pairCounts };
+
     try {
-      await supabase.from('courts').update({ start_time: null }).eq('id', slotId);
+      // 1. 화면 선반영 (Optimistic Update)
+      setCourts(courts.map(c => c.id === slotId ? { ...c, start_time: null } : c));
 
-      // 같이 뛴 선수 기록 (pairCounts update)
       const courtPlayers = players.filter(p => p.status === slotId);
-
       setPairCounts(prev => {
         const next = { ...prev };
         courtPlayers.forEach(p1 => {
@@ -362,9 +413,7 @@ export default function AdminCourtsPage() {
         return next;
       });
 
-      // 경기 종료 시점 기록
       const currentTime = Date.now();
-
       const updatedPlayers = players.map(p => {
         if (p.status === slotId) return { ...p, status: 'lobby', count: p.count + 1, last_game_end_time: currentTime };
         if (p.status === 'wait-1') return { ...p, status: slotId };
@@ -376,27 +425,36 @@ export default function AdminCourtsPage() {
 
       setPlayers(updatedPlayers);
 
-      const changed = updatedPlayers.filter((p, i) => p.status !== players[i].status || p.count !== players[i].count);
+      // 2. DB 동기화
+      const { error: courtError } = await supabase.from('courts').update({ start_time: null }).eq('id', slotId);
+      if (courtError) throw courtError;
 
-      if (changed.length > 0) await supabase.from('players').upsert(changed);
+      const changed = updatedPlayers.filter((p, i) => p.status !== players[i].status || p.count !== players[i].count);
+      if (changed.length > 0) {
+        const { error: playerError } = await supabase.from('players').upsert(changed);
+        if (playerError) throw playerError;
+      }
+    } catch (error) {
+      // 3. 실패 시 롤백
+      setCourts(previousCourts);
+      setPlayers(previousPlayers);
+      setPairCounts(previousPairCounts);
+      showPopup('alert', '오류', '경기 종료 처리에 실패했습니다. 네트워크를 확인해주세요.');
     } finally {
       setTimeout(() => { isFinishingRef.current[slotId] = false; setProcessingCourtId(null); }, 1000);
     }
   };
 
-  // 오늘의 정모 최종 마감 및 DB에 출석 데이터 대량 전송 (Bulk Insert)
   const handleDayClose = async () => {
-    // 이미 전송 중이면 클릭무시 (이탈 방지)
     if (isSubmitting) return;
 
     if (courts.some(court => court.start_time)) return showPopup('alert', '마감 불가', '현재 진행 중인 경기가 있습니다.');
     if (players.length === 0) return showPopup('alert', '마감 불가', '참여한 선수가 없습니다.');
 
-    const now = new Date();
-    const todayDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const nowTime = new Date();
+    const todayDate = `${nowTime.getFullYear()}-${String(nowTime.getMonth() + 1).padStart(2, '0')}-${String(nowTime.getDate()).padStart(2, '0')}`;
 
     try {
-      // 당일 등록된 정모가 있는지 미리 확인
       const { data: existingGatherings } = await supabase
         .from('gatherings')
         .select('id')
@@ -406,15 +464,11 @@ export default function AdminCourtsPage() {
         return showPopup('alert', '중복 마감', '오늘 일자로 이미 등록된 정모 기록이 있습니다. 마감을 중단합니다.');
       }
 
-      // 화면 이동 경고가 포함된 마감 컨펌 창 띄우기
       showPopup('confirm', '정모 마감', `[${locationTitle} / ${timeTitle}] 정모 기록을 저장하고 참석 회원들을 출석 처리하시겠습니까?`, async () => {
         closePopup();
-
-        // 전송 시작 (로딩 상태 On)
         setIsSubmitting(true);
         
         try {
-          // 정모(gathering) 테이블에 정보 생성
           const { data: newGathering, error: gatheringError } = await supabase.from('gatherings').insert([{
             gathering_date: todayDate,
             location: locationTitle,
@@ -431,11 +485,9 @@ export default function AdminCourtsPage() {
             const { data: existingAttendances } = await supabase.from('attendances').select('member_id').eq('attended_date', todayDate);
             const alreadyCheckedMemberIds = new Set(existingAttendances?.map(a => a.member_id) || []);
             
-            // Bulk Insert용 배열 준비
             const attendanceInserts: { gathering_id: string; member_id: string; attended_date: string }[] = [];
             const guestAttendanceInserts: { name: string; age: string; gender: string; grade: string; gathering_id: string; attended_date: string }[] = [];
 
-            // 배열에 데이터 차곡차곡 쌓기
             players.forEach(p => {
               const matchedMember = allMembers.find(m => 
                 m.name.trim() === p.name.trim() && 
@@ -464,7 +516,6 @@ export default function AdminCourtsPage() {
               }
             });
 
-            // 한 번의 통신으로 배열(Bulk) 전송
             if (attendanceInserts.length > 0) {
               await supabase.from('attendances').insert(attendanceInserts);
             }
@@ -473,7 +524,6 @@ export default function AdminCourtsPage() {
             }
           }
 
-          // 전송 끝 (화면 비우기)
           await supabase.from('players').delete().neq("id", '0');
           setPlayers([]);
           
@@ -482,7 +532,7 @@ export default function AdminCourtsPage() {
           console.error('마감 전송 에러:', innerError);
           showPopup('alert', '오류', '데이터 전송 중 통신 오류가 발생했습니다. 다시 시도해 주세요.');
         } finally {
-          setIsSubmitting(false); // 전송 완료 시 무조건 로딩 해제
+          setIsSubmitting(false); 
         }
       });
     } catch (error) {
@@ -495,7 +545,6 @@ export default function AdminCourtsPage() {
     <div className="flex flex-col h-full relative">
       <div className="bg-white px-6 py-3 border-b border-slate-200 flex items-center justify-between shadow-xs z-10">
         
-        {/* 상단 좌측: 정보 수정 모드 */}
         <div className="flex items-center gap-3">
           <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-md">관리자 모드</span>
           
@@ -514,7 +563,6 @@ export default function AdminCourtsPage() {
           )}
         </div>
 
-        {/* 상단 우측: 코트 추가 버튼 등 */}
         <div className="flex items-center gap-2">
           <button onClick={handleAddGameCourt} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors flex items-center gap-1">
             + 코트 추가
@@ -523,7 +571,6 @@ export default function AdminCourtsPage() {
       </div>
 
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-        {/* 좌측 로비 패널 */}
         <LobbyPanel 
           isRegOpen={isRegOpen} setIsRegOpen={setIsRegOpen}
           name={name} setName={setName} age={age} setAge={setAge}
@@ -537,7 +584,6 @@ export default function AdminCourtsPage() {
           now={now}
         />
         
-        {/* 우측 코트 섹션 */}
         <CourtSection 
           viewMode="admin"
           courts={courts} players={players}
@@ -554,7 +600,6 @@ export default function AdminCourtsPage() {
 
       <CustomPopup popup={popup} onClose={closePopup} />
 
-      {/* 회원 불러오기 팝업 창 */}
       {isMemberPopupOpen && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-[100] p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm flex flex-col overflow-hidden max-h-[80vh]">
@@ -622,7 +667,7 @@ export default function AdminCourtsPage() {
         </div>
       )}
       
-      {/* 전체 화면 로딩 오버레이 (마감 전송 시 다른 행동 완벽 차단) */}
+      {/* 전체 화면 로딩 오버레이 */}
       {isSubmitting && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center">
           <div className="w-12 h-12 border-4 border-indigo-400 border-t-white rounded-full animate-spin mb-4"></div>

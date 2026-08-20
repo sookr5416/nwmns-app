@@ -39,7 +39,7 @@ export default function MemberManagementPage() {
   const [searchGender, setSearchGender] = useState('all');
   const [searchGrade, setSearchGrade] = useState('all');
   const [searchJoinMonth, setSearchJoinMonth] = useState('all');   
-  const [searchAttReason, setSearchAttReason] = useState(''); // 🌟 비고 검색 상태 추가
+  const [searchAttReason, setSearchAttReason] = useState(''); 
 
   // '조회' 버튼을 눌렀을 때만 실제 적용되는 검색 상태
   const [appliedSearchName, setAppliedSearchName] = useState('');
@@ -47,7 +47,7 @@ export default function MemberManagementPage() {
   const [appliedSearchGender, setAppliedSearchGender] = useState('all');
   const [appliedSearchGrade, setAppliedSearchGrade] = useState('all');
   const [appliedSearchJoinMonth, setAppliedSearchJoinMonth] = useState('all');
-  const [appliedSearchAttReason, setAppliedSearchAttReason] = useState(''); // 🌟 비고 적용 상태 추가
+  const [appliedSearchAttReason, setAppliedSearchAttReason] = useState(''); 
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(20);
@@ -131,7 +131,7 @@ export default function MemberManagementPage() {
     setAppliedSearchGender(searchGender);
     setAppliedSearchGrade(searchGrade);
     setAppliedSearchJoinMonth(searchJoinMonth);
-    setAppliedSearchAttReason(searchAttReason); // 🌟 비고 검색어 적용
+    setAppliedSearchAttReason(searchAttReason); 
     setCurrentPage(1);
   };
 
@@ -184,6 +184,7 @@ export default function MemberManagementPage() {
     setIsEditModalOpen(true);
   };
 
+  // 회원 수정 함수 (역할(role) 정보도 한 번에 함께 업데이트하도록 변경)
   const handleUpdateMember = async (e: FormEvent) => {
     e.preventDefault();
     if (isSubmitting || !editingMember) return;
@@ -201,6 +202,7 @@ export default function MemberManagementPage() {
         age: cleanAge,
         gender: editGender,
         grade: editGrade,
+        role: editingMember.role, // 저장 시에 role 값도 DB에 반영
         att_reason: editAttReason.trim(), 
         created_at: customCreatedAt
       })
@@ -342,21 +344,6 @@ export default function MemberManagementPage() {
     });
   };
 
-  const handleToggleRole = (id: string, currentRole: string, memberName: string) => {
-    const newRole = currentRole === '일반' ? '운영진' : '일반';
-    const msg = currentRole === '일반' ? `'운영진'으로 임명하시겠습니까?` : `운영진 권한을 해제하시겠습니까?`;
-    
-    showPopup('confirm', '권한 변경', `${memberName} 회원님을 ${msg}`, async () => {
-      closePopup();
-      await supabase.from('members').update({ role: newRole }).eq('id', id);
-      
-      if (editingMember && editingMember.id === id) {
-        setEditingMember(prev => prev ? { ...prev, role: newRole } : null);
-      }
-      fetchMembers();
-    });
-  };
-
   const handleDeleteMemberClick = (id: string, memberName: string) => {
     setMemberToDelete({ id, name: memberName });
     setDeleteReason(''); 
@@ -481,9 +468,6 @@ export default function MemberManagementPage() {
 
   const filteredMembers = members.filter(member => {
     if (appliedSearchName && !member?.name?.toLowerCase().includes(appliedSearchName.toLowerCase())) return false;
-    // 🌟 비고(att_reason) 필터링 추가
-    if (appliedSearchAttReason && !member?.att_reason?.toLowerCase().includes(appliedSearchAttReason.toLowerCase())) return false;
-    
     if (appliedSearchGender !== 'all' && member?.gender !== appliedSearchGender) return false;
     if (appliedSearchGrade !== 'all' && member?.grade !== appliedSearchGrade) return false;
     
@@ -496,6 +480,8 @@ export default function MemberManagementPage() {
       const joinMonth = member?.created_at?.length >= 7 ? member.created_at.substring(5, 7) : '';
       if (joinMonth !== appliedSearchJoinMonth) return false;
     }
+
+    if (appliedSearchAttReason && !member?.att_reason?.toLowerCase().includes(appliedSearchAttReason.toLowerCase())) return false;
 
     return true;
   });
@@ -568,7 +554,6 @@ export default function MemberManagementPage() {
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
         <h2 className="text-sm font-bold text-slate-700 mb-4">상세 검색</h2>
         
-        {/* 🌟 6개의 검색창을 위한 그리드 레이아웃 개선 (md:grid-cols-3 lg:grid-cols-6) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 w-full">
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-500 mb-1 ml-1">이름</span>
@@ -635,7 +620,6 @@ export default function MemberManagementPage() {
             </select>
           </div>
           
-          {/* 🌟 비고 검색창 추가 */}
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-500 mb-1 ml-1">비고</span>
             <input
@@ -1012,10 +996,11 @@ export default function MemberManagementPage() {
                     삭제
                   </button>
 
+                  {/* 운영진 부여/해제 버튼 클릭 시 임시 상태만 변경되도록 수정 */}
                   {editingMember.role !== '모임장' && (
                     <button 
                       type="button"
-                      onClick={() => handleToggleRole(editingMember.id, editingMember.role, editingMember.name)}
+                      onClick={() => setEditingMember(prev => prev ? { ...prev, role: prev.role === '일반' ? '운영진' : '일반' } : null)}
                       disabled={isSubmitting}
                       className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
                     >
