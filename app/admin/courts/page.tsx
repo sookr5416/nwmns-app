@@ -338,6 +338,49 @@ export default function AdminCourtsPage() {
     }
   };
 
+  // 🌟 [추가 기능] 대기 코트 선수들을 특정 게임 코트로 단체 이동 & 대기 순번 자동 당기기
+  const handleMoveTeam = async (fromSlotId: string, toSlotId: string) => {
+    const targetCourt = courts.find(c => c.id === toSlotId);
+    const playersToMove = players.filter(p => p.status === fromSlotId);
+    const playersInTarget = players.filter(p => p.status === toSlotId);
+
+    if (targetCourt?.start_time) return showPopup('alert', '이동 불가', '현재 경기가 진행 중인 코트로는 이동할 수 없습니다.');
+    if (playersInTarget.length + playersToMove.length > 4) return showPopup('alert', '이동 불가', '코트 정원(4명)을 초과하여 이동할 수 없습니다. (먼저 코트를 비워주세요)');
+
+    const previousPlayers = [...players];
+    
+    const updatedPlayers = players.map(p => {
+      // 1. 선택한 대기 코트 인원은 타겟 게임 코트로 이동
+      if (p.status === fromSlotId) return { ...p, status: toSlotId };
+      
+      // 2. 대기 코트에서 이동한 경우, 뒷 번호 대기 코트 인원들을 앞으로 당기기
+      if (fromSlotId.startsWith('wait-')) {
+        const fromIdx = parseInt(fromSlotId.replace('wait-', ''));
+        if (p.status.startsWith('wait-')) {
+          const pIdx = parseInt(p.status.replace('wait-', ''));
+          // 빠져나간 코트보다 뒷 번호 코트라면, 번호를 -1 해서 당겨줌
+          if (pIdx > fromIdx) {
+            return { ...p, status: `wait-${pIdx - 1}` };
+          }
+        }
+      }
+      return p;
+    });
+
+    setPlayers(updatedPlayers);
+
+    // 변경된 모든 플레이어 목록 추출 (이동한 팀 + 당겨진 팀 모두)
+    const changed = updatedPlayers.filter((p, i) => p.status !== players[i].status);
+    
+    if (changed.length > 0) {
+      const { error } = await supabase.from('players').upsert(changed);
+      if (error) {
+        setPlayers(previousPlayers);
+        showPopup('alert', '오류', '코트 일괄 이동 처리에 실패했습니다. 네트워크를 확인해주세요.');
+      }
+    }
+  };
+
   // [Rollback 추가] 초기화 (선수들 로비로 튕겨내기)
   const resetSlot = async (slotId: string) => {
     const previousPlayers = [...players];
@@ -414,12 +457,10 @@ export default function AdminCourtsPage() {
       });
 
       const currentTime = Date.now();
+      
+      // 해당 코트 인원만 로비로 이동시킴 (자동 밀어내기 로직 제거됨)
       const updatedPlayers = players.map(p => {
         if (p.status === slotId) return { ...p, status: 'lobby', count: p.count + 1, last_game_end_time: currentTime };
-        if (p.status === 'wait-1') return { ...p, status: slotId };
-        if (p.status === 'wait-2') return { ...p, status: 'wait-1'};
-        if (p.status === 'wait-3') return { ...p, status: 'wait-2'};
-        if (p.status === 'wait-4') return { ...p, status: 'wait-3'};
         return p;
       });
 
@@ -595,6 +636,7 @@ export default function AdminCourtsPage() {
           isFinishingRef={isFinishingRef} handleDayClose={handleDayClose}
           onDeleteCourt={handleDeleteGameCourt}
           pairCounts={pairCounts}
+          handleMoveTeam={handleMoveTeam} 
         />
       </div>
 
