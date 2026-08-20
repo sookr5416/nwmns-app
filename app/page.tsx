@@ -66,20 +66,28 @@ export default function UserHomePage() {
     const { data, error } = await supabase
       .from('admin')
       .select('*')
-      .eq('admin_id', adminId)     // DB 컬럼명 확인 (id)
-      .eq('admin_pw', adminPw);    // DB 컬럼명 확인 (password)
+      .eq('admin_id', adminId)
+      .eq('admin_pw', adminPw);
 
     if (data && data.length > 0) {
-      // 로그인 성공
-      sessionStorage.setItem('isAdmin', 'true');
+      // 로그인 성공: 해커가 예측할 수 없는 복잡한 난수(토큰) 생성
+      const sessionToken = crypto.randomUUID(); 
+
+      // DB의 admin 테이블에 방금 만든 토큰을 업데이트 (저장)
+      await supabase
+        .from('admin')
+        .update({ session_token: sessionToken })
+        .eq('admin_id', adminId);
+
+      // 토큰을 저장
+      sessionStorage.setItem('adminToken', sessionToken);
       
       setShowLoginModal(false);
       setAdminId('');
       setAdminPw('');
       setLoginError(false);
-      router.push('/admin/courts'); // 관리자 페이지로 이동
+      router.push('/admin/courts'); 
     } else {
-      // 로그인 실패
       setLoginError(true);
     }
   };
