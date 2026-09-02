@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { supabase } from '../../../lib/supabase';
 import CustomPopup, { PopupState } from '../../components/CustomPopup'; 
 
@@ -28,15 +28,15 @@ type SortOrder = 'asc' | 'desc' | null;
 export default function MemberDeletePage() {
   const [deletedMembers, setDeletedMembers] = useState<Member[]>([]);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // 다중 검색 조건 입력 상태 (입력 중)
+  // 다중 검색 조건
   const [searchName, setSearchName] = useState('');
   const [searchBirthMonth, setSearchBirthMonth] = useState(''); 
   const [searchGender, setSearchGender] = useState('all');
   const [searchGrade, setSearchGrade] = useState('all');
   const [searchJoinMonth, setSearchJoinMonth] = useState('');   
 
-  // '조회' 버튼을 눌렀을 때만 실제 적용되는 검색 상태
   const [appliedSearchName, setAppliedSearchName] = useState('');
   const [appliedSearchBirthMonth, setAppliedSearchBirthMonth] = useState('');
   const [appliedSearchGender, setAppliedSearchGender] = useState('all');
@@ -48,6 +48,16 @@ export default function MemberDeletePage() {
 
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
+
+  // 날짜 입력용 복구 모달 상태
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+  const [restoreType, setRestoreType] = useState<'single' | 'batch' | null>(null);
+  const [restoreTargetId, setRestoreTargetId] = useState<string>(''); 
+  const [restoreTargetName, setRestoreTargetName] = useState<string>(''); 
+  const [restoreDate, setRestoreDate] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  });
   
   const [popup, setPopup] = useState<PopupState>({
     isOpen: false,
@@ -67,7 +77,6 @@ export default function MemberDeletePage() {
   }, []);
 
   const fetchDeletedMembers = async () => {
-    // 삭제 처리된 회원(del_type = 'Y')만 조회
     const { data, error } = await supabase
       .from('members')
       .select('*, attendances(id, attended_date)')
@@ -77,7 +86,6 @@ export default function MemberDeletePage() {
     if (error) console.error("데이터 로드 에러:", error);
   };
 
-  // 조회 버튼 클릭 시 검색 조건 적용
   const handleSearch = () => {
     setAppliedSearchName(searchName);
     setAppliedSearchBirthMonth(searchBirthMonth);
@@ -87,61 +95,79 @@ export default function MemberDeletePage() {
     setCurrentPage(1);
   };
 
-  // 검색 필터 적용 중인지 확인
   const hasActiveFilter = appliedSearchName || appliedSearchBirthMonth || appliedSearchGender !== 'all' || appliedSearchGrade !== 'all' || appliedSearchJoinMonth;
 
-  // 선택한 회원 일괄 복구
-  const handleBatchRestore = async () => {
+  // [복구 로직] 모달 띄우기
+  const openSingleRestore = (id: string, name: string) => {
+    setRestoreType('single');
+    setRestoreTargetId(id);
+    setRestoreTargetName(name);
+    setIsRestoreModalOpen(true);
+  };
+
+  const openBatchRestore = () => {
     if (selectedMemberIds.length === 0) {
       return showPopup('alert', '선택 오류', '복구할 회원을 체크박스로 선택해주세요.');
     }
+    setRestoreType('batch');
+    setIsRestoreModalOpen(true);
+  };
 
-    showPopup('confirm', '일괄 복구', `선택한 ${selectedMemberIds.length}명의 회원을 일반 회원으로 복구하시겠습니까?`, async () => {
-      closePopup(); 
-      
-      try {
+  const closeRestoreModal = () => {
+    setIsRestoreModalOpen(false);
+    setRestoreType(null);
+  };
+
+  const executeRestore = async (e: FormEvent) => {
+    e.preventDefault();
+    if (isSubmitting) return;
+    if (!restoreDate) return showPopup('alert', '오류', '복구할 가입일자를 지정해주세요.');
+
+    setIsSubmitting(true);
+    // 가입일자 정렬을 위해 무조건 해당 일자의 23시 59분 59초(한국시간)로 설정
+    const customCreatedAt = `${restoreDate}T23:59:59+09:00`;
+
+    try {
+      if (restoreType === 'single') {
         const { error } = await supabase
           .from('members')
-          .update({ del_type: 'N' })
-          .in('id', selectedMemberIds);
-
+          .update({ del_type: 'N', del_reason: null, created_at: customCreatedAt })
+          .eq('id', restoreTargetId);
         if (error) throw error;
         
-        showPopup('alert', '처리 완료', '성공적으로 복구되었습니다.');
+        setDeletedMembers(deletedMembers.filter(m => m.id !== restoreTargetId));
+        setSelectedMemberIds(selectedMemberIds.filter(id => id !== restoreTargetId));
+        showPopup('alert', '복구 완료', `${restoreTargetName} 회원이 성공적으로 복구되었습니다.`);
+      } else if (restoreType === 'batch') {
+        const { error } = await supabase
+          .from('members')
+          .update({ del_type: 'N', del_reason: null, created_at: customCreatedAt })
+          .in('id', selectedMemberIds);
+        if (error) throw error;
+
+        showPopup('alert', '처리 완료', '선택한 회원들이 성공적으로 일괄 복구되었습니다.');
         setSelectedMemberIds([]); 
         fetchDeletedMembers();
-      } catch (error) {
-        showPopup('alert', '오류', '복구 처리 중 오류가 발생했습니다.');
       }
-    });
+    } catch (error) {
+      showPopup('alert', '오류', '복구 처리 중 오류가 발생했습니다.');
+    } finally {
+      setIsSubmitting(false);
+      closeRestoreModal();
+    }
   };
 
-  // 개별 회원 복구
-  const handleRestore = (id: string, memberName: string) => {
-    showPopup('confirm', '회원 복구', `${memberName} 회원을 일반 회원으로 복구하시겠습니까?`, async () => {
+  // [영구 삭제 로직]
+  const handleHardDelete = (id: string, name: string) => {
+    showPopup('confirm', '영구 삭제 경고', `⚠️ ${name} 회원을 정말 영구 삭제하시겠습니까?\n이 작업은 절대 되돌릴 수 없으며, 기존의 모든 출석 기록도 삭제됩니다.`, async () => {
       closePopup();
-      const { error } = await supabase.from('members').update({ del_type: 'N' }).eq('id', id);
+      setIsSubmitting(true);
       
-      if (error) {
-        showPopup('alert', '오류', '복구 중 오류가 발생했습니다.');
-      } else {
-        setDeletedMembers(deletedMembers.filter(m => m.id !== id));
-        setSelectedMemberIds(selectedMemberIds.filter(selId => selId !== id)); 
-        showPopup('alert', '복구 완료', `${memberName} 회원이 성공적으로 복구되었습니다.`);
-      }
-    });
-  };
-
-  // 영구 삭제 (Hard Delete) - 출석 기록까지 모두 지워짐
-  const handleHardDelete = (id: string, memberName: string) => {
-    showPopup('confirm', '영구 삭제 경고', `⚠️ ${memberName} 회원을 정말 영구 삭제하시겠습니까?\n이 작업은 되돌릴 수 없으며, 해당 회원의 모든 출석 기록도 함께 삭제됩니다.`, async () => {
-      closePopup();
-
-      // 외래키 무결성을 위해 출석 기록 먼저 삭제
+      // 출석 기록 먼저 삭제 후, 회원 삭제 (외래키 무결성 방지)
       await supabase.from('attendances').delete().eq('member_id', id);
-      
-      // 회원 완전 삭제
       const { error } = await supabase.from('members').delete().eq('id', id);
+      
+      setIsSubmitting(false);
 
       if (error) {
         return showPopup('alert', '오류', '영구 삭제 중 오류가 발생했습니다.');
@@ -149,7 +175,7 @@ export default function MemberDeletePage() {
 
       setDeletedMembers(deletedMembers.filter(m => m.id !== id));
       setSelectedMemberIds(selectedMemberIds.filter(selId => selId !== id)); 
-      showPopup('alert', '삭제 완료', `${memberName} 회원이 영구 삭제되었습니다.`);
+      showPopup('alert', '삭제 완료', `${name} 회원이 시스템에서 영구 삭제되었습니다.`);
     });
   };
 
@@ -194,23 +220,19 @@ export default function MemberDeletePage() {
     }
   };
 
-  // 다중 조건 필터링 적용
   const filteredMembers = deletedMembers.filter(member => {
     if (appliedSearchName && !member.name.toLowerCase().includes(appliedSearchName.toLowerCase())) return false;
-    
     if (appliedSearchGender !== 'all' && member.gender !== appliedSearchGender) return false;
-    
     if (appliedSearchGrade !== 'all' && member.grade !== appliedSearchGrade) return false;
     
     if (appliedSearchBirthMonth) {
-      const cleanMonth = appliedSearchBirthMonth.replace(/-/g, ''); // 'YYYY-MM' -> 'YYYYMM'
+      const cleanMonth = appliedSearchBirthMonth.replace(/-/g, ''); 
       if (!member.age.startsWith(cleanMonth)) return false;
     }
 
     if (appliedSearchJoinMonth) {
       if (!member.created_at.startsWith(appliedSearchJoinMonth)) return false;
     }
-
     return true;
   });
 
@@ -250,14 +272,12 @@ export default function MemberDeletePage() {
   return (
     <div className="p-6 w-full flex-1 overflow-y-auto">
       
-      {/* 타이틀 및 상단 공통 버튼 영역 */}
+      {/* 타이틀 영역 */}
       <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">탈퇴자 명단 관리</h1>
           <p className="text-sm text-slate-500 mt-1">비활성화 처리된 탈퇴 회원을 다시 복구하거나, 데이터를 영구 삭제할 수 있습니다.</p>
         </div>
-        
-        {/* 우측 상단 공통 액션 버튼 */}
         <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
           <button
             onClick={handleSearch}
@@ -271,63 +291,33 @@ export default function MemberDeletePage() {
       {/* 다중 검색 조건 영역 */}
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
         <h2 className="text-sm font-bold text-slate-700 mb-4">상세 검색</h2>
-        
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 w-full">
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-500 mb-1 ml-1">이름</span>
-            <input
-              type="text"
-              placeholder="이름 입력"
-              value={searchName}
-              onChange={(e) => setSearchName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
-            />
+            <input type="text" placeholder="이름 입력" value={searchName} onChange={(e) => setSearchName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all" />
           </div>
-
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-500 mb-1 ml-1">생년월</span>
-            <input
-              type="month"
-              value={searchBirthMonth}
-              onChange={(e) => setSearchBirthMonth(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
-            />
+            <input type="month" value={searchBirthMonth} onChange={(e) => setSearchBirthMonth(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all" />
           </div>
-
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-500 mb-1 ml-1">성별</span>
-            <select
-              value={searchGender}
-              onChange={(e) => setSearchGender(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
-            >
+            <select value={searchGender} onChange={(e) => setSearchGender(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all">
               <option value="all">전체</option>
               <option value="남">남</option>
               <option value="여">여</option>
             </select>
           </div>
-
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-500 mb-1 ml-1">조(급수)</span>
-            <select
-              value={searchGrade}
-              onChange={(e) => setSearchGrade(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
-            >
+            <select value={searchGrade} onChange={(e) => setSearchGrade(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all">
               <option value="all">전체</option>
               {['A', 'B', 'C', 'D', 'E', 'F'].map(lvl => <option key={lvl} value={lvl}>{lvl}조</option>)}
             </select>
           </div>
-
           <div className="flex flex-col">
             <span className="text-xs font-bold text-slate-500 mb-1 ml-1">가입월</span>
-            <input
-              type="month"
-              value={searchJoinMonth}
-              onChange={(e) => setSearchJoinMonth(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
-            />
+            <input type="month" value={searchJoinMonth} onChange={(e) => setSearchJoinMonth(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all" />
           </div>
         </div>
       </div>
@@ -343,8 +333,8 @@ export default function MemberDeletePage() {
         
         <div className="flex flex-col md:flex-row items-center gap-2 w-full md:w-auto">
           <button 
-            onClick={handleBatchRestore}
-            className="w-full md:w-auto px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-lg shadow-sm transition-colors whitespace-nowrap active:scale-95"
+            onClick={openBatchRestore}
+            className="w-full md:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg shadow-sm transition-colors whitespace-nowrap active:scale-95"
           >
             선택 일괄 복구 {selectedMemberIds.length > 0 ? `(${selectedMemberIds.length}명)` : ''}
           </button>
@@ -388,21 +378,13 @@ export default function MemberDeletePage() {
               <th onClick={() => handleSort('age')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                 생년월일 {sortField === 'age' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
-              <th onClick={() => handleSort('gender')} className="px-4 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
-                성별 {sortField === 'gender' && (sortOrder === 'asc' ? '▲' : '▼')}
-              </th>
-              <th onClick={() => handleSort('grade')} className="px-4 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
-                조(급수) {sortField === 'grade' && (sortOrder === 'asc' ? '▲' : '▼')}
-              </th>
+              <th className="px-4 py-4 font-bold text-slate-500">성별</th>
+              <th className="px-4 py-4 font-bold text-slate-500">조(급수)</th>
               <th onClick={() => handleSort('created_at')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                 가입일자 {sortField === 'created_at' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
-              <th onClick={() => handleSort('last_attendance')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
-                최근 참여일 {sortField === 'last_attendance' && (sortOrder === 'asc' ? '▲' : '▼')}
-              </th>
-              <th className="px-6 py-4 font-bold text-slate-500">
-                탈퇴 사유
-              </th>
+              <th className="px-6 py-4 font-bold text-slate-500">최근 참여일</th>
+              <th className="px-6 py-4 font-bold text-slate-500">탈퇴 사유</th>
               <th className="px-6 py-4 font-bold text-right">관리</th>
             </tr>
           </thead>
@@ -439,12 +421,13 @@ export default function MemberDeletePage() {
                   </td>
                   <td className="px-6 py-4 text-slate-500 font-medium text-sm">{joinDate}</td>
                   <td className="px-6 py-4 text-slate-500 font-medium text-sm">{lastAttendance}</td>
-                  <td className="px-6 py-4 text-slate-500 font-medium text-sm">
+                  <td className="px-6 py-4 text-slate-500 font-medium text-sm truncate max-w-[150px]">
                     {member.del_reason || '-'}
                   </td>
+                  {/* 관리 버튼 (기존처럼 복구 / 영구 삭제 2가지 노출) */}
                   <td className="px-6 py-4 text-right space-x-2">
                     <button 
-                      onClick={() => handleRestore(member.id, member.name)}
+                      onClick={() => openSingleRestore(member.id, member.name)}
                       className="px-3 py-1.5 text-sm font-bold bg-indigo-100 hover:bg-indigo-600 text-indigo-700 hover:text-white rounded-md transition-colors"
                     >
                       복구
@@ -504,6 +487,44 @@ export default function MemberDeletePage() {
           >
             다음
           </button>
+        </div>
+      )}
+
+      {/* 가입일자 재설정 및 복구 실행 팝업 모달 */}
+      {isRestoreModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col animate-scale-up">
+            <div className="px-6 py-4 bg-indigo-50 border-b border-indigo-100 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-indigo-800">회원 복구</h3>
+              <button onClick={closeRestoreModal} className="w-8 h-8 rounded-full bg-white border border-indigo-200 flex items-center justify-center font-bold text-indigo-500 hover:bg-indigo-100">✕</button>
+            </div>
+            <form onSubmit={executeRestore} className="p-6 space-y-4">
+              <p className="text-sm text-slate-600 leading-relaxed mb-4">
+                {restoreType === 'single' ? (
+                  <><strong className="text-slate-800 text-base">{restoreTargetName}</strong> 회원을 복구합니다.</>
+                ) : (
+                  <>선택한 <strong className="text-slate-800 text-base">{selectedMemberIds.length}</strong>명의 회원을 일괄 복구합니다.</>
+                )}
+                <br/>복구 시 반영될 <strong className="text-indigo-600">새로운 가입일자</strong>를 지정해주세요.
+              </p>
+
+              <div className="flex flex-col">
+                <label className="text-xs font-bold text-slate-500 mb-2">가입일자 (재등록일)</label>
+                <input 
+                  type="date" 
+                  value={restoreDate} 
+                  onChange={e => setRestoreDate(e.target.value)} 
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium text-slate-700" 
+                />
+                <p className="text-xs text-slate-400 mt-2">* 데이터 정렬을 위해 시간은 자동으로 23:59:59 로 입력됩니다.</p>
+              </div>
+
+              <div className="flex gap-2 justify-end border-t border-slate-100 pt-4 mt-6">
+                <button type="button" onClick={closeRestoreModal} disabled={isSubmitting} className="px-5 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors">취소</button>
+                <button type="submit" disabled={isSubmitting} className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors">복구 실행</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

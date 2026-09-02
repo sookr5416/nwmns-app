@@ -24,7 +24,7 @@ interface Member {
   grade: string;
   role: string;
   created_at: string; 
-  att_reason?: string; // 비고 컬럼 추가
+  att_reason?: string; 
 }
 
 // 출석 통계 데이터 구조 인터페이스
@@ -33,7 +33,6 @@ interface ProcessedMember extends Member {
   attendedDates: string[];
 }
 
-// 정렬 필드에 att_reason 추가
 type SortField = 'name' | 'age' | 'gender' | 'grade' | 'created_at' | 'att_reason' | 'monthlyCount';
 type SortOrder = 'asc' | 'desc' | null;
 
@@ -43,13 +42,13 @@ export default function MonthlyMemberAttendancePage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [allAttendances, setAllAttendances] = useState<AttendanceRecord[]>([]);
   
-  // 입력 중인 조회 조건 상태 (조회 버튼을 누르기 전)
+  // 입력 중인 조회 조건 상태
   const [inputMonth, setInputMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [inputName, setInputName] = useState<string>(''); 
   const [inputWarning, setInputWarning] = useState<boolean>(false); 
   const [inputWarningCount, setInputWarningCount] = useState<number | string>(2); 
 
-  // 실제로 적용된 조회 조건 상태 (조회 버튼을 누른 후)
+  // 실제로 적용된 조회 조건 상태
   const [selectedMonth, setSelectedMonth] = useState<string>(inputMonth);
   const [searchTerm, setSearchTerm] = useState<string>(''); 
   const [showWarningOnly, setShowWarningOnly] = useState<boolean>(false); 
@@ -108,7 +107,6 @@ export default function MonthlyMemberAttendancePage() {
     
     if (attError) console.error('출석 데이터 조회 에러:', attError);
 
-    // att_reason 항목 추가해서 Select
     const { data: memData, error: memError } = await supabase
       .from('members')
       .select('id, name, age, gender, grade, role, created_at, att_reason')
@@ -121,7 +119,6 @@ export default function MonthlyMemberAttendancePage() {
     if (attData) setAllAttendances(attData as unknown as AttendanceRecord[]);
   };
 
-  // 조회 버튼 클릭 시 실제 조건 적용
   const handleSearch = () => {
     if (!inputMonth) {
       return showPopup('alert', '입력 오류', '조회할 월을 선택해주세요.');
@@ -130,9 +127,48 @@ export default function MonthlyMemberAttendancePage() {
     setSelectedMonth(inputMonth);
     setSearchTerm(inputName);
     setShowWarningOnly(inputWarning);
-    // 빈 값이면 0으로 처리, 아니면 숫자 변환
     setWarningCountThreshold(inputWarningCount === '' ? 0 : Number(inputWarningCount));
     setCurrentPage(1);
+  };
+
+  // 엑셀 다운로드 핸들러
+  const handleExportExcel = () => {
+    if (filteredMembers.length === 0) {
+      return showPopup('alert', '알림', '다운로드할 데이터가 없습니다.');
+    }
+
+    // 1. 엑셀의 헤더(첫 줄) 정의
+    const headers = ['이름', '마지막 참여일자', '월 참석 횟수'];
+
+    // 2. 검색/필터링 된 데이터를 엑셀 행 형태로 변환
+    const csvData = filteredMembers.map(member => {
+      // 참여 기록 배열의 마지막 요소가 마지막 참여일자 (정렬되어 있음)
+      const lastAttendance = member.attendedDates.length > 0 
+        ? member.attendedDates[member.attendedDates.length - 1] 
+        : '';
+      
+      // 행 데이터 조합 (쉼표로 구분)
+      return [
+        member.name,
+        lastAttendance,
+        `${member.monthlyCount}`
+      ].join(',');
+    });
+
+    // 3. 헤더와 데이터를 합침
+    const csvContent = [headers.join(','), ...csvData].join('\n');
+
+    // 4. 한글 깨짐 방지를 위한 BOM(\uFEFF) 추가 후 Blob 생성
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    // 5. 가상의 a 태그를 만들어 다운로드 트리거
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `월별출석통계_${selectedMonth}.csv`); // 파일명 설정
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const hasActiveFilter = searchTerm !== '' || showWarningOnly;
@@ -212,7 +248,7 @@ export default function MonthlyMemberAttendancePage() {
         else if (sortField === 'age') { valA = a.age; valB = b.age; }
         else if (sortField === 'gender') { valA = a.gender; valB = b.gender; }
         else if (sortField === 'grade') { valA = a.grade; valB = b.grade; }
-        else if (sortField === 'att_reason') { valA = a.att_reason || ''; valB = b.att_reason || ''; } // 정렬 조건 추가
+        else if (sortField === 'att_reason') { valA = a.att_reason || ''; valB = b.att_reason || ''; } 
         else if (sortField === 'created_at') { valA = new Date(a.created_at).getTime(); valB = new Date(b.created_at).getTime(); }
         else if (sortField === 'monthlyCount') { valA = a.monthlyCount; valB = b.monthlyCount; }
 
@@ -243,7 +279,7 @@ export default function MonthlyMemberAttendancePage() {
     return result;
   }, [processedMembers, searchTerm, showWarningOnly, warningCountThreshold, sortField, sortOrder]);
 
-  const totalPages = Math.ceil(filteredMembers.length / itemsPerPage) || 1;             
+  const totalPages = Math.ceil(filteredMembers.length / itemsPerPage) || 1;            
   const startIndex = (currentPage - 1) * itemsPerPage;                                  
   const currentMembers = filteredMembers.slice(startIndex, startIndex + itemsPerPage);  
 
@@ -263,8 +299,17 @@ export default function MonthlyMemberAttendancePage() {
           <p className="text-sm text-slate-500 mt-1">월별 참석 횟수를 확인하고, 활동이 저조한 회원을 관리하세요.</p>
         </div>
         
-        {/* 우측 상단 공통 액션 버튼 */}
+        {/* 우측 상단 공통 액션 버튼 (엑셀 다운로드 버튼 추가) */}
         <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
+          <button
+            onClick={handleExportExcel}
+            className="flex-1 md:flex-none px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 shadow-sm transition-colors whitespace-nowrap flex items-center justify-center gap-1.5"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            엑셀 다운로드
+          </button>
           <button
             onClick={handleSearch}
             className="flex-1 md:flex-none px-4 py-2 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800 shadow-sm transition-colors whitespace-nowrap"
@@ -369,7 +414,6 @@ export default function MonthlyMemberAttendancePage() {
                 <th onClick={() => handleSort('created_at')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                   가입일자 {sortField === 'created_at' && (sortOrder === 'asc' ? '▲' : '▼')}
                 </th>
-                {/* 비고 컬럼 추가 */}
                 <th onClick={() => handleSort('att_reason')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                   비고 {sortField === 'att_reason' && (sortOrder === 'asc' ? '▲' : '▼')}
                 </th>
@@ -411,7 +455,6 @@ export default function MonthlyMemberAttendancePage() {
                   <td className="px-6 py-4 text-slate-600 text-sm font-medium">
                     {formatJoinDate(member.created_at)}
                   </td>
-                  {/* 비고 데이터 추가 */}
                   <td className="px-6 py-4 text-slate-600 text-sm font-medium">
                     {member.att_reason || '-'}
                   </td>
@@ -431,10 +474,8 @@ export default function MonthlyMemberAttendancePage() {
                 </tr>
               ))}
               
-              {/* 필터 결과가 없을 때 보여주는 빈 상태 */}
               {currentMembers.length === 0 && (
                 <tr>
-                  {/* 컬럼 추가로 인해 colSpan 7 -> 8 로 변경 */}
                   <td colSpan={8} className="px-6 py-16 text-center text-slate-400 font-medium">
                     조건에 맞는 회원이 없습니다.
                   </td>
@@ -518,7 +559,6 @@ export default function MonthlyMemberAttendancePage() {
                       <span className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-black shrink-0">
                         {i + 1}
                       </span>
-                      {/* 날짜 옆에 요일 추가 */}
                       {date} ({getDayOfWeek(date)})
                     </li>
                   ))}
