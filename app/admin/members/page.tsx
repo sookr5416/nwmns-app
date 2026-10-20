@@ -228,7 +228,12 @@ export default function MemberManagementPage() {
     setIsSubmitting(true); 
 
     const cleanAge = age.replace(/-/g, ''); 
-    const customCreatedAt = `${joinDate}T00:00:00.000Z`;
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
+    const customCreatedAt = `${joinDate}T${hours}:${minutes}:${seconds}.${milliseconds}Z`;
     
     const { data: existingData, error: searchError } = await supabase
       .from('members')
