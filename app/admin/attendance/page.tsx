@@ -445,23 +445,30 @@ export default function GatheringManagementPage() {
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left whitespace-nowrap">
+          <table className="w-full min-w-[850px] table-fixed text-left whitespace-nowrap">
+            <colgroup>
+              <col className="w-44" />   {/* 정모 일자 (YY.MM.DD (요일)) */}
+              <col className="w-64" />   {/* 장소 */}
+              <col className="w-40" />   {/* 시간 */}
+              <col className="w-auto" /> {/* 비고 (남는 여백 차지) */}
+              <col className="w-56" />   {/* 관리 버튼 */}
+            </colgroup>
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm">
               <tr>
-                <th className="px-6 py-4 font-bold">정모 일자</th>
-                <th className="px-6 py-4 font-bold">장소</th>
-                <th className="px-6 py-4 font-bold">시간</th>
-                <th className="px-6 py-4 font-bold">비고</th>
-                <th className="px-6 py-4 font-bold text-right">관리</th>
+                <th className="px-6 py-4 font-bold text-center">정모 일자</th>
+                <th className="px-6 py-4 font-bold text-center">장소</th>
+                <th className="px-6 py-4 font-bold text-center">시간</th>
+                <th className="px-6 py-4 font-bold text-center">비고</th>
+                <th className="px-6 py-4 font-bold text-center">관리</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {currentGatherings.map((g) => (
                 <tr key={g.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-slate-800">{formatDateString(g.gathering_date)}</td>
-                  <td className="px-6 py-4 font-bold text-slate-700">{g.location}</td>
-                  <td className="px-6 py-4 text-slate-600 font-medium">{g.start_time}</td>
-                  <td className="px-6 py-4 text-slate-500 text-sm">{g.memo || '-'}</td>
+                  <td className="px-6 py-4 font-bold text-center text-slate-800">{formatDateString(g.gathering_date)}</td>
+                  <td className="px-6 py-4 font-bold text-slate-700 truncate" title={g.location}>{g.location}</td>
+                  <td className="px-6 py-4 text-center text-slate-600 font-medium">{g.start_time}</td>
+                  <td className="px-6 py-4 text-slate-500 text-sm truncate" title={g.memo || ''}>{g.memo || '-'}</td>
                   <td className="px-6 py-4 text-right space-x-2">
                     <button 
                       onClick={() => handleSelectGathering(g)}

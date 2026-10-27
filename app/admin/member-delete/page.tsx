@@ -353,7 +353,18 @@ export default function MemberDeletePage() {
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden overflow-x-auto">
-        <table className="w-full text-left whitespace-nowrap">
+        <table className="w-full min-w-[1050px] table-fixed text-left whitespace-nowrap">
+          <colgroup>
+            <col className="w-14" />   {/* 체크박스 */}
+            <col className="w-40" />   {/* 이름 */}
+            <col className="w-32" />   {/* 생년월일 (YY.MM.DD) */}
+            <col className="w-24" />   {/* 성별 (남/여) */}
+            <col className="w-24" />   {/* 조(급수) */}
+            <col className="w-32" />   {/* 가입일자 */}
+            <col className="w-32" />   {/* 최근 참여일 */}
+            <col className="w-auto" /> {/* 탈퇴 사유 (남는 여백 차지) */}
+            <col className="w-44" />   {/* 관리 버튼 영역 (복구, 영구 삭제) */}
+          </colgroup>
           <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm select-none">
             <tr>
               <th className="px-4 py-4 w-12 text-center">
@@ -372,20 +383,20 @@ export default function MemberDeletePage() {
                 />
               </th>
               
-              <th onClick={() => handleSort('name')} className="px-4 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+              <th onClick={() => handleSort('name')} className="px-4 py-4 text-center font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                 이름 {sortField === 'name' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
-              <th onClick={() => handleSort('age')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+              <th onClick={() => handleSort('age')} className="px-6 py-4 text-center font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                 생년월일 {sortField === 'age' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
-              <th className="px-4 py-4 font-bold text-slate-500">성별</th>
-              <th className="px-4 py-4 font-bold text-slate-500">조(급수)</th>
-              <th onClick={() => handleSort('created_at')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+              <th className="px-4 py-4 text-center font-bold text-slate-500">성별</th>
+              <th className="px-4 py-4 text-center font-bold text-slate-500">조(급수)</th>
+              <th onClick={() => handleSort('created_at')} className="px-6 py-4 text-center font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                 가입일자 {sortField === 'created_at' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
-              <th className="px-6 py-4 font-bold text-slate-500">최근 참여일</th>
+              <th className="px-6 py-4 text-center font-bold text-slate-500">최근 참여일</th>
               <th className="px-6 py-4 font-bold text-slate-500">탈퇴 사유</th>
-              <th className="px-6 py-4 font-bold text-right">관리</th>
+              <th className="px-6 py-4 font-bold text-center">관리</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -407,24 +418,20 @@ export default function MemberDeletePage() {
                       className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
                     />
                   </td>
-                  <td className="px-4 py-4 font-bold text-slate-600 text-base flex items-center gap-2 line-through decoration-slate-400">
-                    {member.name}
-                  </td>
-                  <td className="px-6 py-4 text-slate-500 font-medium text-sm">{formatDOB(member.age)}</td>
-                  <td className="px-4 py-4">
+
+                  <td className="px-4 py-4 text-center font-bold text-slate-600 text-base line-through decoration-slate-400 truncate" title={member.name}>{member.name}</td>
+                  <td className="px-6 py-4 text-center text-slate-500 font-medium text-sm">{formatDOB(member.age)}</td>
+                  <td className="px-4 py-4 text-center">
                     <span className="text-xs font-bold px-2 py-1 rounded bg-slate-100 text-slate-500">
                       {member.gender}
                     </span>
                   </td>
-                  <td className="px-4 py-4 text-slate-500 font-bold">
-                    {member.grade}조
-                  </td>
-                  <td className="px-6 py-4 text-slate-500 font-medium text-sm">{joinDate}</td>
-                  <td className="px-6 py-4 text-slate-500 font-medium text-sm">{lastAttendance}</td>
-                  <td className="px-6 py-4 text-slate-500 font-medium text-sm truncate max-w-[150px]">
-                    {member.del_reason || '-'}
-                  </td>
-                  {/* 관리 버튼 (기존처럼 복구 / 영구 삭제 2가지 노출) */}
+
+                  <td className="px-4 py-4 text-center text-slate-500 font-bold">{member.grade}조</td>
+                  <td className="px-6 py-4 text-center text-slate-500 font-medium text-sm">{joinDate}</td>
+                  <td className="px-6 py-4 text-center text-slate-500 font-medium text-sm">{lastAttendance}</td>
+                  <td className="px-6 py-4 text-left text-slate-500 font-medium text-sm truncate" title={member.del_reason || ''}>{member.del_reason || '-'}</td>
+                  
                   <td className="px-6 py-4 text-right space-x-2">
                     <button 
                       onClick={() => openSingleRestore(member.id, member.name)}

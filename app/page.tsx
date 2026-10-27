@@ -61,33 +61,35 @@ export default function UserHomePage() {
   // Supabase admin 테이블 연동 로그인 처리
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
-    
-    // admin 테이블에서 입력한 id와 password가 일치하는 데이터 조회
-    const { data, error } = await supabase
-      .from('admin')
-      .select('*')
-      .eq('admin_id', adminId)
-      .eq('admin_pw', adminPw);
+    setLoginError(false);
 
-    if (data && data.length > 0) {
-      // 로그인 성공: 해커가 예측할 수 없는 복잡한 난수(토큰) 생성
-      const sessionToken = crypto.randomUUID(); 
+    try {
+      const response = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          adminId,
+          adminPw,
+        }),
+      });
 
-      // DB의 admin 테이블에 방금 만든 토큰을 업데이트 (저장)
-      await supabase
-        .from('admin')
-        .update({ session_token: sessionToken })
-        .eq('admin_id', adminId);
+      // 서버 응답이 200번대(성공)일 때만 JSON 파싱
+      if (response.ok) {
+        const data = await response.json();
+        sessionStorage.setItem('adminToken', data.token);
 
-      // 토큰을 저장
-      sessionStorage.setItem('adminToken', sessionToken);
-      
-      setShowLoginModal(false);
-      setAdminId('');
-      setAdminPw('');
-      setLoginError(false);
-      router.push('/admin/courts'); 
-    } else {
+        setShowLoginModal(false);
+        setAdminId('');
+        setAdminPw('');
+        setLoginError(false);
+        router.push('/admin/courts');
+      } else {
+        setLoginError(true);
+      }
+    } catch (err) {
+      console.error('클라이언트 fetch 에러:', err);
       setLoginError(true);
     }
   };

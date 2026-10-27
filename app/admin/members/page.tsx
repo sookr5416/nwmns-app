@@ -670,10 +670,23 @@ export default function MemberManagementPage() {
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden overflow-x-auto">
-        <table className="w-full text-left whitespace-nowrap">
+        <table className="w-full min-w-[1100px] table-fixed text-left whitespace-nowrap">
+          <colgroup>
+            <col className="w-14" />          {/* 체크박스 */}
+            <col className="w-40" />          {/* 이름 (모임장/운영진 뱃지 공간 확보) */}
+            <col className="w-32" />          {/* 생년월일 (YY.MM.DD) */}
+            <col className="w-24" />          {/* 성별 */}
+            <col className="w-24" />          {/* 조(급수) */}
+            <col className="w-32" />          {/* 가입일자 (YY.MM.DD) */}
+            <col className="w-32" />          {/* 최근 참여일 (YY.MM.DD) */}
+            <col className="w-auto" />        {/* 비고 (남는 여백 차지, 내용 길어지면 truncate) */}
+            <col className="w-32" />          {/* 이번 달 출석 */}
+            <col className="w-40" />          {/* 관리 버튼 영역 */}
+          </colgroup>
+
           <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm select-none">
             <tr>
-              <th className="px-4 py-4 w-12 text-center">
+              <th className="px-4 py-4 text-center">
                 <input 
                   type="checkbox" 
                   checked={currentMembers.length > 0 && currentMembers.every(m => selectedMemberIds.includes(m.id))}
@@ -689,31 +702,31 @@ export default function MemberManagementPage() {
                 />
               </th>
               
-              <th onClick={() => handleSort('name')} className="px-4 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+              <th onClick={() => handleSort('name')} className="px-4 py-4 text-center font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                 이름 {sortField === 'name' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
-              <th onClick={() => handleSort('age')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+              <th onClick={() => handleSort('age')} className="px-6 py-4 text-center font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                 생년월일 {sortField === 'age' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
-              <th onClick={() => handleSort('gender')} className="px-4 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+              <th onClick={() => handleSort('gender')} className="px-4 py-4 text-center font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                 성별 {sortField === 'gender' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
-              <th onClick={() => handleSort('grade')} className="px-4 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+              <th onClick={() => handleSort('grade')} className="px-4 py-4 text-center font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                 조(급수) {sortField === 'grade' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
-              <th onClick={() => handleSort('created_at')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+              <th onClick={() => handleSort('created_at')} className="px-6 py-4 text-center font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                 가입일자 {sortField === 'created_at' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
-              <th onClick={() => handleSort('last_attendance')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+              <th onClick={() => handleSort('last_attendance')} className="px-6 py-4 text-center font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                 최근 참여일 {sortField === 'last_attendance' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
-              <th onClick={() => handleSort('att_reason')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
+              <th onClick={() => handleSort('att_reason')} className="px-6 py-4 text-center font-bold cursor-pointer hover:text-indigo-600 transition-colors">
                 비고 {sortField === 'att_reason' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
               <th onClick={() => handleSort('monthly_count')} className="px-6 py-4 font-bold text-center cursor-pointer hover:text-indigo-600 transition-colors">
                 이번 달 출석 {sortField === 'monthly_count' && (sortOrder === 'asc' ? '▲' : '▼')}
               </th>
-              <th className="px-6 py-4 font-bold text-right">관리</th>
+              <th className="px-6 py-4 font-bold text-center">관리</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -740,23 +753,26 @@ export default function MemberManagementPage() {
                       className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
                     />
                   </td>
-                  <td className="px-4 py-4 font-bold text-slate-800 text-base flex items-center gap-2">
-                    {member.name}
-                    {member.role === '모임장' && <span className="bg-purple-100 text-purple-700 text-xs font-extrabold px-2 py-0.5 rounded-full border border-purple-200">모임장</span>}
-                    {member.role === '운영진' && <span className="bg-blue-100 text-blue-700 text-xs font-extrabold px-2 py-0.5 rounded-full border border-blue-200">운영진</span>}
+                  <td className="px-6 py-4 font-bold text-slate-800 text-center">
+                    <div className="flex items-center gap-1.5 truncate text-center justify-center">
+                      <span className="truncate">{member.name}</span>
+                      {member.role === '모임장' && <span className="shrink-0 bg-purple-100 text-purple-700 text-xs font-extrabold px-2 py-0.5 rounded-full border border-purple-200">모임장</span>}
+                      {member.role === '운영진' && <span className="shrink-0 bg-blue-100 text-blue-700 text-xs font-extrabold px-2 py-0.5 rounded-full border border-blue-200">운영진</span>}
+                    </div>
                   </td>
-                  <td className="px-6 py-4 text-slate-600 font-medium text-sm">{formatDOB(member.age)}</td>
-                  <td className="px-4 py-4">
+                  <td className="px-6 py-4 text-center text-slate-600 font-medium text-sm">{formatDOB(member.age)}</td>
+                  <td className="px-4 py-4 text-center">
                     <span className={`text-xs font-bold px-2 py-1 rounded ${member.gender === '남' ? 'text-blue-700 bg-blue-100' : 'text-yellow-800 bg-yellow-100'}`}>
                       {member.gender}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-slate-700 font-bold">
+                  <td className="px-6 py-4 text-center text-slate-700 font-bold">
                     {member.grade}조
                   </td>
-                  <td className="px-6 py-4 text-slate-600 font-medium text-sm">{joinDate}</td>
-                  <td className="px-6 py-4 text-slate-600 font-medium text-sm">{lastAttendance}</td>
-                  <td className="px-6 py-4 text-slate-600 text-sm font-medium">
+                  <td className="px-6 py-4 text-center text-slate-600 font-medium text-sm">{joinDate}</td>
+                  <td className="px-6 py-4 text-center text-slate-600 font-medium text-sm">{lastAttendance}</td>
+                  {/* 비고란 내용이 길어도 다른 컬럼 너비를 밀어내지 않도록 truncate 적용 */}
+                  <td className="px-6 py-4 text-slate-600 text-sm font-medium truncate" title={member.att_reason || ''}>
                     {member.att_reason || '-'}
                   </td>
                   <td className="px-6 py-4 text-center">

@@ -395,11 +395,21 @@ export default function MonthlyMemberAttendancePage() {
       {/* 회원 명단 데이터 테이블 */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-center whitespace-nowrap">
+          <table className="w-full min-w-[950px] table-fixed text-center whitespace-nowrap">
+            <colgroup>
+              <col className="w-16" />   {/* No (순번) */}
+              <col className="w-48" />   {/* 이름 및 직책 뱃지 */}
+              <col className="w-32" />   {/* 생년월일 (YY.MM.DD) */}
+              <col className="w-24" />   {/* 성별 (남/여) */}
+              <col className="w-24" />   {/* 조(급수) */}
+              <col className="w-32" />   {/* 가입일자 */}
+              <col className="w-auto" /> {/* 비고 (남는 여백 차지) */}
+              <col className="w-32" />   {/* 월 참석 횟수 */}
+            </colgroup>
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm select-none">
               <tr>
                 <th className="px-6 py-4 font-bold w-16">No</th>
-                <th onClick={() => handleSort('name')} className="px-6 py-4 font-bold text-left cursor-pointer hover:text-indigo-600 transition-colors">
+                <th onClick={() => handleSort('name')} className="px-6 py-4 font-bold text-center cursor-pointer hover:text-indigo-600 transition-colors">
                   이름 {sortField === 'name' && (sortOrder === 'asc' ? '▲' : '▼')}
                 </th>
                 <th onClick={() => handleSort('age')} className="px-6 py-4 font-bold cursor-pointer hover:text-indigo-600 transition-colors">
@@ -428,18 +438,12 @@ export default function MonthlyMemberAttendancePage() {
                   <td className="px-6 py-4 font-bold text-slate-400">
                     {startIndex + idx + 1}
                   </td>
-                  <td className="px-6 py-4 font-bold text-slate-800 text-left">
-                    {member.name}
-                    {member.role === '모임장' && (
-                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200">
-                        모임장
-                      </span>
-                    )}
-                    {member.role === '운영진' && (
-                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200">
-                        운영진
-                      </span>
-                    )}
+                  <td className="px-6 py-4 font-bold text-slate-800 text-center">
+                    <div className="flex items-center gap-1.5 truncate text-center justify-center">
+                      <span className="truncate">{member.name}</span>
+                      {member.role === '모임장' && (<span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200">모임장</span>)}
+                      {member.role === '운영진' && (<span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200">운영진</span>)}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-slate-600 text-sm font-medium">
                     {formatDOB(member.age)}
@@ -455,9 +459,11 @@ export default function MonthlyMemberAttendancePage() {
                   <td className="px-6 py-4 text-slate-600 text-sm font-medium">
                     {formatJoinDate(member.created_at)}
                   </td>
-                  <td className="px-6 py-4 text-slate-600 text-sm font-medium">
+                  
+                  <td className="px-6 py-4 text-left text-slate-600 text-sm font-medium truncate" title={member.att_reason || ''}>
                     {member.att_reason || '-'}
                   </td>
+                  
                   <td className="px-6 py-4 font-bold text-slate-700">
                     <button
                       onClick={() => setSelectedMemberModal(member)}
