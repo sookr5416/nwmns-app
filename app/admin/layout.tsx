@@ -2,40 +2,52 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [isAuthorized, setIsAuthorized] = useState(false); 
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [currentAdminId, setCurrentAdminId] = useState<string>('ADMIN');
 
-  // 방문증(토큰) DB 검증 로직
+  const lastLoggedPathRef = useRef<string>('');
+
+  const logActivity = (actionType: 'PAGE_VIEW' | 'LOGOUT' | 'WINDOW_CLOSE', targetPath?: string) => {
+    const adminId = sessionStorage.getItem('adminId') || currentAdminId || 'ADMIN';
+    const path = targetPath || pathname;
+
+    fetch('/api/admin/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminId, actionType, path }),
+    }).catch((err) => console.error('활동 로그 전송 실패:', err));
+  };
+
   useEffect(() => {
     const verifySession = async () => {
-      // 브라우저에서 토큰 꺼내기
       const token = sessionStorage.getItem('adminToken');
       
-      // 1차 방어: 아예 토큰이 없으면 쫓아냄
       if (!token) {
         alert('관리자 로그인이 필요한 페이지입니다.');
         router.push('/');
         return;
       }
 
-      // 2차 방어: 브라우저의 토큰과 DB에 저장된 토큰이 일치하는지 검사
       const { data, error } = await supabase
         .from('admin')
         .select('admin_id')
         .eq('session_token', token);
 
       if (data && data.length > 0) {
-        // 일치하는 데이터가 있으면 진짜 관리자로 인정!
-        setIsAuthorized(true); 
+        setIsAuthorized(true);
+        const adminId = data[0].admin_id;
+        setCurrentAdminId(adminId);
+        sessionStorage.setItem('adminId', adminId);
       } else {
-        // 해커가 F12로 'true'나 가짜 값을 넣고 들어온 경우 쫓아냄
         alert('비정상적인 접근이거나 세션이 만료되었습니다.');
         sessionStorage.removeItem('adminToken');
+        sessionStorage.removeItem('adminId');
         router.push('/');
       }
     };
@@ -43,32 +55,68 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     verifySession();
   }, [router]);
 
+  useEffect(() => {
+    if (!isAuthorized || !pathname) return;
+    if (lastLoggedPathRef.current === pathname) return;
+    lastLoggedPathRef.current = pathname;
+
+    logActivity('PAGE_VIEW', pathname);
+  }, [pathname, isAuthorized]);
+
+  useEffect(() => {
+    if (!isAuthorized) return;
+
+    const handleBeforeUnload = () => {
+      const adminId = sessionStorage.getItem('adminId') || 'ADMIN';
+      const payload = JSON.stringify({
+        adminId,
+        actionType: 'WINDOW_CLOSE',
+        path: window.location.pathname,
+      });
+
+      if (navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: 'application/json' });
+        navigator.sendBeacon('/api/admin/log', blob);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isAuthorized]);
+
   const menuItems = [
     { name: '코트 및 대기 배정', href: '/admin/courts' },
     { name: '회원 명단 관리', href: '/admin/members' },
     { name: '정모 일정 관리', href: '/admin/attendance' },
     { name: '회원별 출석 관리', href: '/admin/member-attendance' },
     { name: '탈퇴 회원 관리', href: '/admin/member-delete' },
+    { name: '로그 관리', href: '/admin/access-logs' },
   ];
 
   if (!isAuthorized) {
-    return <div className="h-screen w-screen bg-slate-50 flex items-center justify-center font-bold text-slate-500">인증 확인 중...</div>;
+    return (
+      <div className="h-screen w-screen bg-slate-50 flex items-center justify-center font-bold text-slate-500">
+        인증 확인 중...
+      </div>
+    );
   }
 
-  // 로그아웃 함수: DB의 토큰도 폐기
   const handleLogout = async () => {
+    logActivity('LOGOUT', pathname);
+
     const token = sessionStorage.getItem('adminToken');
     if (token) {
-      // DB에 저장된 토큰을 비워버림 (null 처리)
       await supabase.from('admin').update({ session_token: null }).eq('session_token', token);
     }
     sessionStorage.removeItem('adminToken');
+    sessionStorage.removeItem('adminId');
     router.push('/');
   };
 
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden">
-      
       <aside className="hidden md:flex w-64 bg-slate-900 text-white flex-col flex-shrink-0 shadow-xl z-30">
         <div className="p-6 border-b border-slate-800">
           <h1 className="text-xl font-extrabold tracking-tight text-indigo-400">클럽 관리 시스템</h1>
@@ -94,7 +142,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           })}
         </nav>
         
-        {/* 로그아웃 버튼 */}
         <div className="p-4 border-t border-slate-800">
           <button 
             onClick={handleLogout}
@@ -108,7 +155,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       <main className="flex-1 flex flex-col h-full overflow-y-auto bg-slate-50 relative">
         {children}
       </main>
-
     </div>
   );
 }
