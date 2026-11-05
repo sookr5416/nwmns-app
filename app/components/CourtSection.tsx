@@ -96,7 +96,7 @@ export default function CourtSection({
                       {hasNoLimit ? `${slotPlayers.length}명` : `${slotPlayers.length}/4명`}
                     </span>
 
-                    {viewMode === 'admin' && isGameCourt && onDeleteCourt && (
+                    {viewMode === 'admin' && (isGameCourt || isWaitCourt) && onDeleteCourt && (
                       <button
                         onClick={() => onDeleteCourt(slot.id)}
                         className="text-[10px] md:text-[11px] font-bold text-red-300 hover:text-white bg-red-900/40 hover:bg-red-600 px-1 md:px-1.5 py-0.5 rounded transition-colors"

@@ -26,6 +26,8 @@ export default function AdminCourtsPage() {
   const [memberSearchTerm, setMemberSearchTerm] = useState('');                     
   const [isEditingInfo, setIsEditingInfo] = useState(false);                        
   
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
   // 데이터 상태 관리
   const [players, setPlayers] = useState<Player[]>([]);                             
   const [dbMembers, setDbMembers] = useState<DbMember[]>([]);                       
@@ -171,7 +173,7 @@ export default function AdminCourtsPage() {
     if (gameCourts.length >= 8) {
       return showPopup('alert', '알림', '게임 코트는 최대 8개까지만 추가할 수 있습니다.');
     }
-
+  
     const newIndex = gameCourts.length + 1;
     const newCourtId = `court-${Date.now()}`;
     const newCourtTitle = `${newIndex}번 코트`;
@@ -188,16 +190,59 @@ export default function AdminCourtsPage() {
     }
   };
 
+  const handleAddWaitCourt = async () => {
+    const waitCourts = courts.filter(c => c.type === 'wait');
+    if (waitCourts.length >= 8) {
+      return showPopup('alert', '알림', '대기 코트는 최대 8개까지만 추가할 수 있습니다.');
+    }
+
+    const newIndex = waitCourts.length + 1;
+    const newCourtId = `wait-${Date.now()}`;
+    const newCourtTitle = `대기 ${newIndex}`;
+    const maxOrder = Math.max(...courts.map(c => c.order_idx || 0), 0);
+    const newCourt: Court = { id: newCourtId, title: newCourtTitle, type: 'wait', order_idx: maxOrder + 1, start_time: null };
+
+    const previousCourts = [...courts];
+    setCourts([...courts, newCourt]);
+
+    const { error } = await supabase.from('courts').insert([newCourt]);
+    if (error) {
+      setCourts(previousCourts);
+      showPopup('alert', '오류', '대기 코트 추가에 실패했습니다. 네트워크를 확인해주세요.');
+    }
+  };
+
   // [Rollback 추가] 기존 게임 코트 삭제
-  const handleDeleteGameCourt = async (courtId: string) => {
-    const gameCourts = courts.filter(c => c.type === 'game');
-    if (gameCourts.length <= 2) return showPopup('alert', '알림', '게임 코트는 최소 2개 이상 유지되어야 합니다.');
-    
+  const handleDeleteCourt = async (courtId: string) => {
     const targetCourt = courts.find(c => c.id === courtId);
-    if (targetCourt?.start_time) return showPopup('alert', '알림', '현재 경기가 진행 중인 코트는 삭제할 수 없습니다.');
+    if (!targetCourt) return;
+
+    // 1. 게임 코트인 경우에만 최소 2개 유지 조건 검사
+    if (targetCourt.type === 'game') {
+      const gameCourts = courts.filter(c => c.type === 'game');
+      if (gameCourts.length <= 2) {
+        return showPopup('alert', '알림', '게임 코트는 최소 2개 이상 유지되어야 합니다.');
+      }
+    }
     
+    // 2. 진행 중인 경기가 있는지 확인
+    if (targetCourt.start_time) {
+      return showPopup('alert', '알림', '현재 경기가 진행 중인 코트는 삭제할 수 없습니다.');
+    }
+    
+    // 3. 대기 코트인 경우에만 최소 2개 유지 조건 검사
+    if (targetCourt.type === 'wait') {
+      const waitCourts = courts.filter(c => c.type === 'wait');
+      if (waitCourts.length <= 2) {
+        return showPopup('alert', '알림', '대기 코트는 최소 2개 이상 유지되어야 합니다.');
+      }
+    }
+
+    // 4. 코트에 배정된 인원이 있는지 확인
     const playersInCourt = players.filter(p => p.status === courtId);
-    if (playersInCourt.length > 0) return showPopup('alert', '알림', `해당 코트에 선수가 ${playersInCourt.length}명 등록되어 있어 삭제할 수 없습니다.`);
+    if (playersInCourt.length > 0) {
+      return showPopup('alert', '알림', `해당 코트에 선수가 ${playersInCourt.length}명 배정되어 있어 삭제할 수 없습니다. (먼저 코트를 비워주세요)`);
+    }
 
     const previousCourts = [...courts]; // 백업
     setCourts(courts.filter(c => c.id !== courtId)); // 화면 선반영
@@ -617,7 +662,10 @@ export default function AdminCourtsPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button onClick={handleAddGameCourt} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors flex items-center gap-1">
+          <button 
+            onClick={() => setIsAddModalOpen(true)} 
+            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+          >
             + 코트 추가
           </button>
         </div>
@@ -646,13 +694,79 @@ export default function AdminCourtsPage() {
           handleDragStart={handleDragStart} handlePlayerClick={handlePlayerClick}
           resetSlot={resetSlot} finishGame={finishGame} startGame={startGame}
           isFinishingRef={isFinishingRef} handleDayClose={handleDayClose}
-          onDeleteCourt={handleDeleteGameCourt}
+          onDeleteCourt={handleDeleteCourt}
           pairCounts={pairCounts}
           handleMoveTeam={handleMoveTeam} 
         />
       </div>
 
       <CustomPopup popup={popup} onClose={closePopup} />
+      
+      {isAddModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col border border-slate-100">
+            {/* 팝업 헤더 */}
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-800">코트 추가</h3>
+                <p className="text-xs text-slate-500 mt-0.5">추가할 코트 유형을 선택해주세요.</p>
+              </div>
+              <button
+                onClick={() => setIsAddModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center font-bold text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* 카드 선택 버튼 2개 */}
+            <div className="p-6 grid grid-cols-2 gap-4">
+              {/* 1. 게임 코트 버튼 */}
+              <button
+                onClick={() => {
+                  handleAddGameCourt();
+                  setIsAddModalOpen(false);
+                }}
+                className="group flex flex-col items-center p-5 rounded-2xl border-2 border-emerald-100 bg-emerald-50/40 hover:bg-emerald-50 hover:border-emerald-500 hover:shadow-md transition-all active:scale-95 text-center cursor-pointer"
+              >
+                {/* 배드민턴 경기 코트 일러스트 아이콘 */}
+                <div className="w-16 h-16 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-md shadow-emerald-200 group-hover:scale-105 transition-transform mb-3">
+                  <svg className="w-9 h-9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" />
+                    <line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" strokeWidth="2" strokeDasharray="1.5 1.5" />
+                    <line x1="12" y1="3" x2="12" y2="21" stroke="currentColor" />
+                    <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+                  </svg>
+                </div>
+                <span className="font-extrabold text-slate-800 text-sm group-hover:text-emerald-700 transition-colors">게임 코트</span>
+                <span className="text-[11px] text-slate-500 mt-1">4인 경기 및 타이머</span>
+                <span className="mt-3 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">경기 진행</span>
+              </button>
+
+              {/* 2. 대기 코트 버튼 */}
+              <button
+                onClick={() => {
+                  handleAddWaitCourt();
+                  setIsAddModalOpen(false);
+                }}
+                className="group flex flex-col items-center p-5 rounded-2xl border-2 border-amber-100 bg-amber-50/40 hover:bg-amber-50 hover:border-amber-500 hover:shadow-md transition-all active:scale-95 text-center cursor-pointer"
+              >
+                {/* 대기석/타이머 일러스트 아이콘 */}
+                <div className="w-16 h-16 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-200 group-hover:scale-105 transition-transform mb-3">
+                  <svg className="w-9 h-9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <circle cx="12" cy="12" r="8" stroke="currentColor" />
+                    <polyline points="12 7 12 12 15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </div>
+                <span className="font-extrabold text-slate-800 text-sm group-hover:text-amber-700 transition-colors">대기 코트</span>
+                <span className="text-[11px] text-slate-500 mt-1">다음 게임 팀 사전 구성</span>
+                <span className="mt-3 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">대기/이동</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isMemberPopupOpen && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-[100] p-4">

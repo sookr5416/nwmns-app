@@ -355,15 +355,9 @@ export default function MemberDeletePage() {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden overflow-x-auto">
         <table className="w-full min-w-[1050px] table-fixed text-left whitespace-nowrap">
           <colgroup>
-            <col className="w-14" />   {/* 체크박스 */}
-            <col className="w-40" />   {/* 이름 */}
-            <col className="w-32" />   {/* 생년월일 (YY.MM.DD) */}
-            <col className="w-24" />   {/* 성별 (남/여) */}
-            <col className="w-24" />   {/* 조(급수) */}
-            <col className="w-32" />   {/* 가입일자 */}
-            <col className="w-32" />   {/* 최근 참여일 */}
-            <col className="w-auto" /> {/* 탈퇴 사유 (남는 여백 차지) */}
-            <col className="w-44" />   {/* 관리 버튼 영역 (복구, 영구 삭제) */}
+            {['w-14', 'w-40', 'w-32', 'w-24', 'w-24', 'w-32', 'w-32', 'w-auto', 'w-44'].map((width, idx) => (
+              <col key={idx} className={width} />
+            ))}
           </colgroup>
           <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm select-none">
             <tr>

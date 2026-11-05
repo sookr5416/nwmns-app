@@ -397,14 +397,9 @@ export default function MonthlyMemberAttendancePage() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[950px] table-fixed text-center whitespace-nowrap">
             <colgroup>
-              <col className="w-16" />   {/* No (순번) */}
-              <col className="w-48" />   {/* 이름 및 직책 뱃지 */}
-              <col className="w-32" />   {/* 생년월일 (YY.MM.DD) */}
-              <col className="w-24" />   {/* 성별 (남/여) */}
-              <col className="w-24" />   {/* 조(급수) */}
-              <col className="w-32" />   {/* 가입일자 */}
-              <col className="w-auto" /> {/* 비고 (남는 여백 차지) */}
-              <col className="w-32" />   {/* 월 참석 횟수 */}
+              {['w-16', 'w-48', 'w-32', 'w-24', 'w-24', 'w-32', 'w-auto', 'w-32'].map((width, idx) => (
+                <col key={idx} className={width} />
+              ))}
             </colgroup>
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm select-none">
               <tr>

@@ -672,16 +672,9 @@ export default function MemberManagementPage() {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden overflow-x-auto">
         <table className="w-full min-w-[1100px] table-fixed text-left whitespace-nowrap">
           <colgroup>
-            <col className="w-14" />          {/* 체크박스 */}
-            <col className="w-40" />          {/* 이름 (모임장/운영진 뱃지 공간 확보) */}
-            <col className="w-32" />          {/* 생년월일 (YY.MM.DD) */}
-            <col className="w-24" />          {/* 성별 */}
-            <col className="w-24" />          {/* 조(급수) */}
-            <col className="w-32" />          {/* 가입일자 (YY.MM.DD) */}
-            <col className="w-32" />          {/* 최근 참여일 (YY.MM.DD) */}
-            <col className="w-auto" />        {/* 비고 (남는 여백 차지, 내용 길어지면 truncate) */}
-            <col className="w-32" />          {/* 이번 달 출석 */}
-            <col className="w-40" />          {/* 관리 버튼 영역 */}
+            {['w-14', 'w-40', 'w-32', 'w-24', 'w-24', 'w-32', 'w-32', 'w-auto', 'w-32', 'w-40'].map((w, i) => (
+              <col key={i} className={w} />
+            ))}
           </colgroup>
 
           <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm select-none">

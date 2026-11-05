@@ -447,11 +447,9 @@ export default function GatheringManagementPage() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[850px] table-fixed text-left whitespace-nowrap">
             <colgroup>
-              <col className="w-44" />   {/* 정모 일자 (YY.MM.DD (요일)) */}
-              <col className="w-64" />   {/* 장소 */}
-              <col className="w-40" />   {/* 시간 */}
-              <col className="w-auto" /> {/* 비고 (남는 여백 차지) */}
-              <col className="w-56" />   {/* 관리 버튼 */}
+              {['w-44', 'w-64', 'w-40', 'w-auto', 'w-56'].map((w, i) => (
+                <col key={i} className={w} />
+              ))}
             </colgroup>
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm">
               <tr>
