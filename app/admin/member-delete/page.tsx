@@ -26,6 +26,14 @@ type SortField = 'name' | 'age' | 'gender' | 'grade' | 'created_at' | 'last_atte
 type SortOrder = 'asc' | 'desc' | null;
 
 export default function MemberDeletePage() {
+  const logMemberDeleteAction = (actionType: string, detail: string, reason?: string) => {
+    fetch('/api/admin/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actionType, path: detail, reason }),
+    }).catch(() => {});
+  };
+
   const [deletedMembers, setDeletedMembers] = useState<Member[]>([]);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -135,6 +143,8 @@ export default function MemberDeletePage() {
           .eq('id', restoreTargetId);
         if (error) throw error;
         
+        logMemberDeleteAction('MEMBER_RESTORE', `[회원 복구] ${restoreTargetName}`, `재등록 가입일자: ${restoreDate}`);
+
         setDeletedMembers(deletedMembers.filter(m => m.id !== restoreTargetId));
         setSelectedMemberIds(selectedMemberIds.filter(id => id !== restoreTargetId));
         showPopup('alert', '복구 완료', `${restoreTargetName} 회원이 성공적으로 복구되었습니다.`);
@@ -144,6 +154,8 @@ export default function MemberDeletePage() {
           .update({ del_type: 'N', del_reason: null, created_at: customCreatedAt })
           .in('id', selectedMemberIds);
         if (error) throw error;
+
+        logMemberDeleteAction('MEMBER_RESTORE', `[회원 일괄 복구] 총 ${selectedMemberIds.length}명`, `재등록 가입일자: ${restoreDate}`);
 
         showPopup('alert', '처리 완료', '선택한 회원들이 성공적으로 일괄 복구되었습니다.');
         setSelectedMemberIds([]); 
@@ -173,6 +185,8 @@ export default function MemberDeletePage() {
         return showPopup('alert', '오류', '영구 삭제 중 오류가 발생했습니다.');
       }
 
+      logMemberDeleteAction('MEMBER_HARD_DELETE', `[회원 영구 삭제] ${name}`, '데이터베이스에서 완전히 제거됨');
+      
       setDeletedMembers(deletedMembers.filter(m => m.id !== id));
       setSelectedMemberIds(selectedMemberIds.filter(selId => selId !== id)); 
       showPopup('alert', '삭제 완료', `${name} 회원이 시스템에서 영구 삭제되었습니다.`);

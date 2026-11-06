@@ -26,32 +26,20 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const verifySession = async () => {
-      const token = sessionStorage.getItem('adminToken');
-      
-      if (!token) {
-        alert('관리자 로그인이 필요한 페이지입니다.');
-        router.push('/');
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('admin')
-        .select('admin_id')
-        .eq('session_token', token);
-
-      if (data && data.length > 0) {
-        setIsAuthorized(true);
-        const adminId = data[0].admin_id;
-        setCurrentAdminId(adminId);
-        sessionStorage.setItem('adminId', adminId);
-      } else {
-        alert('비정상적인 접근이거나 세션이 만료되었습니다.');
-        sessionStorage.removeItem('adminToken');
-        sessionStorage.removeItem('adminId');
-        router.push('/');
+      try {
+        const res = await fetch('/api/admin/auth', { method: 'GET' });
+        const data = await res.json();
+        if (res.ok && data.isValid) {
+          setIsAuthorized(true);
+          setCurrentAdminId(data.adminId);
+        } else {
+          alert('세션이 만료되었습니다.');
+          router.replace('/');
+        }
+      } catch {
+        router.replace('/');
       }
     };
-
     verifySession();
   }, [router]);
 
@@ -105,14 +93,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   const handleLogout = async () => {
     logActivity('LOGOUT', pathname);
-
-    const token = sessionStorage.getItem('adminToken');
-    if (token) {
-      await supabase.from('admin').update({ session_token: null }).eq('session_token', token);
-    }
-    sessionStorage.removeItem('adminToken');
-    sessionStorage.removeItem('adminId');
-    router.push('/');
+    await fetch('/api/admin/auth', { method: 'POST' }); // 쿠키 및 DB 무효화
+    router.replace('/');
   };
 
   return (

@@ -16,7 +16,8 @@ export default function UserHomePage() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [adminId, setAdminId] = useState('');
   const [adminPw, setAdminPw] = useState('');
-  const [loginError, setLoginError] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   // 타이머
   useEffect(() => {
@@ -61,36 +62,30 @@ export default function UserHomePage() {
   // Supabase admin 테이블 연동 로그인 처리
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
-    setLoginError(false);
+    setLoginError('');
+    setIsLoading(true); // 통신 시작 시 로딩 켜기
 
     try {
       const response = await fetch('/api/admin/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          adminId,
-          adminPw,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminId, adminPw }),
       });
 
-      // 서버 응답이 200번대(성공)일 때만 JSON 파싱
       if (response.ok) {
-        const data = await response.json();
-        sessionStorage.setItem('adminToken', data.token);
-
         setShowLoginModal(false);
         setAdminId('');
         setAdminPw('');
-        setLoginError(false);
+        setLoginError('');
         router.push('/admin/courts');
       } else {
-        setLoginError(true);
+        const data = await response.json();
+        setLoginError(data.message || '로그인에 실패했습니다.');
       }
     } catch (err) {
-      console.error('클라이언트 fetch 에러:', err);
-      setLoginError(true);
+      setLoginError('서버 통신에 실패했습니다.');
+    } finally {
+      setIsLoading(false); // 성공/실패 여부와 상관없이 통신 종료 시 로딩 끄기
     }
   };
 
@@ -103,7 +98,7 @@ export default function UserHomePage() {
           setShowLoginModal(true);
           setAdminId('');
           setAdminPw('');
-          setLoginError(false);
+          setLoginError('');
         }}
         className="fixed bottom-6 right-6 bg-slate-800 text-white w-12 h-12 rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-indigo-600 transition-all z-[50] hover:scale-110 active:scale-95 cursor-pointer"
         title="관리자 모드 접속"
@@ -133,19 +128,19 @@ export default function UserHomePage() {
             </div>
             
             <form onSubmit={handleLogin} className="p-6 space-y-4">
-              {/* 아이디 입력란 추가 */}
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">아이디</label>
                 <input 
                   type="text" 
                   value={adminId}
+                  disabled={isLoading} // 로딩 중 입력 방지
                   onChange={(e) => {
                     setAdminId(e.target.value);
-                    setLoginError(false);
+                    setLoginError('');
                   }}
                   autoFocus
                   placeholder="아이디를 입력하세요" 
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -154,25 +149,42 @@ export default function UserHomePage() {
                 <input 
                   type="password" 
                   value={adminPw}
+                  disabled={isLoading} // 로딩 중 입력 방지
                   onChange={(e) => {
                     setAdminPw(e.target.value);
-                    setLoginError(false);
+                    setLoginError('');
                   }}
                   placeholder="비밀번호를 입력하세요" 
-                  className={`w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm focus:outline-none focus:ring-2 ${
+                  className={`w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                     loginError ? 'border-red-300 focus:ring-red-500' : 'border-slate-200 focus:ring-indigo-500'
                   }`}
                 />
                 {loginError && (
-                  <p className="text-red-500 text-xs font-bold mt-2">아이디 또는 비밀번호가 일치하지 않습니다.</p>
+                  <p className="text-red-500 text-xs font-bold mt-2">{loginError}</p>
                 )}
               </div>
               
+              {/* ▼ 로딩 스피너가 적용된 접속 버튼 */}
               <button 
                 type="submit" 
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-md shadow-indigo-200 transition-all active:scale-[0.98]"
+                disabled={isLoading}
+                className={`w-full py-3 text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
+                  isLoading 
+                    ? 'bg-indigo-400 cursor-not-allowed' 
+                    : 'bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200 active:scale-[0.98]'
+                }`}
               >
-                접속하기
+                {isLoading ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    보안 인증 중...
+                  </>
+                ) : (
+                  '접속하기'
+                )}
               </button>
             </form>
           </div>

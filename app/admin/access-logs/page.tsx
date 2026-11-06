@@ -144,6 +144,22 @@ export default function AccessLogsPage() {
         return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">메뉴 이동</span>;
       case 'WINDOW_CLOSE':
         return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-bold bg-slate-200 text-slate-700 border border-slate-300">창 닫기</span>;
+      case 'MEMBER_CREATE':
+        return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">회원 등록</span>;
+      case 'MEMBER_UPDATE':
+        return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200">회원 수정</span>;
+      case 'MEMBER_DELETE':
+        return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">회원 삭제</span>;
+        case 'GATHERING_CREATE':
+        return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-bold bg-teal-100 text-teal-700 border border-teal-200">정모 등록</span>;
+      case 'GATHERING_UPDATE':
+        return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-bold bg-cyan-100 text-cyan-700 border border-cyan-200">정모 수정</span>;
+      case 'GATHERING_DELETE':
+        return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700 border border-rose-200">정모 삭제</span>;
+      case 'MEMBER_RESTORE':
+        return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200">회원 복구</span>;
+      case 'MEMBER_HARD_DELETE':
+        return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-bold bg-red-200 text-red-800 border border-red-300">영구 삭제</span>;
       default:
         return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">{actionType || '접속'}</span>;
     }
@@ -239,6 +255,17 @@ export default function AccessLogsPage() {
               <option value="PAGE_VIEW">메뉴 이동</option>
               <option value="LOGOUT">로그아웃</option>
               <option value="WINDOW_CLOSE">창 닫기</option>
+              <option disabled>──────────</option>
+              <option value="MEMBER_CREATE">회원 등록</option>
+              <option value="MEMBER_UPDATE">회원 수정</option>
+              <option value="MEMBER_DELETE">회원 삭제</option>
+              <option disabled>──────────</option>
+              <option value="GATHERING_CREATE">정모 등록</option>
+              <option value="GATHERING_UPDATE">정모 수정</option>
+              <option value="GATHERING_DELETE">정모 삭제</option>
+              <option disabled>──────────</option>
+              <option value="MEMBER_RESTORE">회원 복구</option>
+              <option value="MEMBER_HARD_DELETE">영구 삭제</option>
             </select>
           </div>
 
@@ -400,11 +427,13 @@ export default function AccessLogsPage() {
                         className="px-4 py-3.5 text-left text-xs text-slate-500 font-medium truncate"
                         title={log.failure_reason || (isSuccess ? '정상 처리' : '-')}
                       >
-                        {isSuccess ? (
-                          <span className="text-slate-400">-</span>
+                        {log.failure_reason ? (
+                          <span className={isSuccess ? "text-indigo-600 font-bold" : "text-red-500 font-bold"}>
+                            {log.failure_reason}
+                          </span>
                         ) : (
-                          <span className="text-red-500 font-bold">
-                            {log.failure_reason || '알 수 없는 오류'}
+                          <span className="text-slate-400">
+                            {isSuccess ? '정상 처리' : '알 수 없는 오류'}
                           </span>
                         )}
                       </td>

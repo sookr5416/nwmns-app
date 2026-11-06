@@ -81,6 +81,14 @@ export default function MemberManagementPage() {
   const [memberToDelete, setMemberToDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleteReason, setDeleteReason] = useState('');
 
+  const logMemberAction = (actionType: string, detail: string, reason?: string) => {
+    fetch('/api/admin/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actionType, path: detail, reason }), // ⬅️ reason 포함하여 전송
+    }).catch(() => {});
+  };
+  
   const [popup, setPopup] = useState<PopupState>({
     isOpen: false,
     type: 'alert',
@@ -213,6 +221,50 @@ export default function MemberManagementPage() {
     if (error) {
       showPopup('alert', '오류', '회원 정보 수정 중 오류가 발생했습니다.');
     } else {
+      // 1. members 배열에서 '수정되기 전의 원본 회원 정보'를 찾습니다.
+      const originalMember = members.find(m => m.id === editingMember.id);
+      let changeDetail = '단순 저장(변경 없음)';
+
+      // 2. 원본 데이터와 현재 팝업창에 입력된 데이터(edit~)를 비교합니다.
+      if (originalMember) {
+        const changes = [];
+        
+        // ① 생년월일 비교 (안전하게 String으로 감싸서 비교)
+        if (String(originalMember.age || '') !== String(cleanAge)) {
+          changes.push(`생년월일(${originalMember.age} ➔ ${cleanAge})`);
+        }
+
+        // ② 가입일자 비교
+        const originalJoinDate = originalMember.created_at?.split('T')[0] || '';
+        if (originalJoinDate !== String(editJoinDate)) {
+          changes.push(`가입일자(${originalJoinDate} ➔ ${editJoinDate})`);
+        }
+
+        // ③ 성별 비교
+        if (String(originalMember.gender || '') !== String(editGender)) {
+          changes.push(`성별(${originalMember.gender} ➔ ${editGender})`);
+        }
+
+        // ④ 급수 비교
+        if (String(originalMember.grade || '') !== String(editGrade)) {
+          changes.push(`급수(${originalMember.grade}조 ➔ ${editGrade}조)`);
+        }
+
+        // ⑤ 비고칸 비교
+        const originalReason = originalMember.att_reason || '';
+        const newReason = editAttReason.trim();
+        if (originalReason !== newReason) {
+          changes.push(`비고(${originalReason || '없음'} ➔ ${newReason || '없음'})`);
+        }
+
+        if (changes.length > 0) {
+          changeDetail = changes.join(', ');
+        }
+      }
+
+      // 3. 추출한 상세 변경 내역을 3번째 파라미터로 함께 보냅니다.
+      logMemberAction('MEMBER_UPDATE', `[회원 수정] ${editingMember.name}`, changeDetail); 
+      
       showPopup('alert', '수정 완료', '회원 정보가 성공적으로 수정되었습니다.');
       closeEditModal();
       fetchMembers();
@@ -278,6 +330,8 @@ export default function MemberManagementPage() {
           if (restoreError) {
             showPopup('alert', '오류', '회원 복구 중 오류가 발생했습니다.');
           } else {
+            logMemberAction('MEMBER_UPDATE', `[회원 복구] ${name.trim()} 계정 활성화`);
+
             showPopup('alert', '복구 완료', '기존 회원 정보 및 출석 기록이 성공적으로 복구되었습니다.');
             closeRegisterModal(); 
             fetchMembers();
@@ -296,6 +350,8 @@ export default function MemberManagementPage() {
     if (error) {
       showPopup('alert', '오류', '회원 등록 중 오류가 발생했습니다.');
     } else {
+      logMemberAction('MEMBER_CREATE', `[회원 등록] ${name.trim()} (${gender}/${grade}조)`);
+
       showPopup('alert', '등록 완료', '성공적으로 등록되었습니다.');
       closeRegisterModal(); 
       fetchMembers(); 
@@ -403,6 +459,8 @@ export default function MemberManagementPage() {
     setMembers(members.filter(m => m.id !== id));
     setSelectedMemberIds(selectedMemberIds.filter(selId => selId !== id)); 
     closeDeleteModal(); 
+
+    logMemberAction('MEMBER_DELETE', `[회원 삭제/비활성화] ${name} (사유: ${deleteReason || '없음'})`);
     showPopup('alert', '삭제 완료', hasAttendance ? '출석 기록이 존재하여 안전하게 비활성화 처리되었습니다.' : '회원이 성공적으로 삭제되었습니다.');
   };
 

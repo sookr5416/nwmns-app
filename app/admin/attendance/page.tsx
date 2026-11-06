@@ -15,6 +15,14 @@ interface Gathering {
 
 export default function GatheringManagementPage() {
   
+  const logGatheringAction = (actionType: string, detail: string, reason?: string) => {
+    fetch('/api/admin/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actionType, path: detail, reason }),
+    }).catch(() => {});
+  };
+
   const [gatheringList, setGatheringList] = useState<Gathering[]>([]);                
   const [selectedGathering, setSelectedGathering] = useState<Gathering | null>(null); 
   const [gatheringAttendees, setGatheringAttendees] = useState<any[]>([]);            
@@ -131,6 +139,8 @@ export default function GatheringManagementPage() {
       if (error) {
         showPopup('alert', '오류', '정모 등록 중 오류가 발생했습니다.');
       } else {
+        logGatheringAction('GATHERING_CREATE', `[정모 등록] ${gatheringDate} (${location.trim()})`, `시간: ${startTime.trim()}, 비고: ${memo.trim() || '없음'}`);
+
         showPopup('alert', '등록 완료', '새로운 정모 일정이 등록되었습니다.');
         closeRegisterModal(); // 등록 성공 시 초기화 후 창 닫기
         fetchGatherings();
@@ -173,6 +183,27 @@ export default function GatheringManagementPage() {
       if (error) {
         showPopup('alert', '오류', '정모 수정 중 오류가 발생했습니다.');
       } else {
+        // ▼ 1. 원본 데이터와 수정된 값을 비교하여 변경 내역 추출
+        const changes = [];
+        
+        if (editingGathering.location !== editLocation.trim()) {
+          changes.push(`장소(${editingGathering.location} ➔ ${editLocation.trim()})`);
+        }
+        if (editingGathering.start_time !== editStartTime.trim()) {
+          changes.push(`시간(${editingGathering.start_time} ➔ ${editStartTime.trim()})`);
+        }
+        
+        const originalMemo = editingGathering.memo || '';
+        const newMemo = editMemo.trim();
+        if (originalMemo !== newMemo) {
+          changes.push(`비고(${originalMemo || '없음'} ➔ ${newMemo || '없음'})`);
+        }
+
+        const changeDetail = changes.length > 0 ? changes.join(', ') : '단순 저장(변경 없음)';
+
+        // ▼ 2. 상세 변경 내역을 reason(상세 컬럼)으로 함께 전송
+        logGatheringAction('GATHERING_UPDATE', `[정모 수정] ${editingGathering.gathering_date}`, changeDetail);
+
         showPopup('alert', '수정 완료', '정모 정보가 성공적으로 수정되었습니다.');
         setEditingGathering(null);
         fetchGatherings();
@@ -195,6 +226,8 @@ export default function GatheringManagementPage() {
       if (error) {
         showPopup('alert', '오류', '정모 삭제 중 오류가 발생했습니다.');
       } else {
+        logGatheringAction('GATHERING_DELETE', `[정모 삭제] ${dateStr} 일정 삭제`);
+
         setGatheringList(gatheringList.filter(g => g.id !== id));
         if (selectedGathering?.id === id) setSelectedGathering(null);
         showPopup('alert', '삭제 완료', '정모 일정 및 관련 출석 기록이 성공적으로 삭제되었습니다.');
