@@ -85,7 +85,7 @@ export default function MemberManagementPage() {
     fetch('/api/admin/log', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ actionType, path: detail, reason }), // ⬅️ reason 포함하여 전송
+      body: JSON.stringify({ actionType, path: detail, reason }), 
     }).catch(() => {});
   };
   
@@ -204,13 +204,14 @@ export default function MemberManagementPage() {
     const cleanAge = editAge.replace(/-/g, ''); 
     const customCreatedAt = `${editJoinDate}T00:00:00.000Z`;
 
+    // 1. DB 업데이트 (role 값 포함)
     const { error } = await supabase
       .from('members')
       .update({
         age: cleanAge,
         gender: editGender,
         grade: editGrade,
-        role: editingMember.role, // 저장 시에 role 값도 DB에 반영
+        role: editingMember.role,
         att_reason: editAttReason.trim(), 
         created_at: customCreatedAt
       })
@@ -221,36 +222,34 @@ export default function MemberManagementPage() {
     if (error) {
       showPopup('alert', '오류', '회원 정보 수정 중 오류가 발생했습니다.');
     } else {
-      // 1. members 배열에서 '수정되기 전의 원본 회원 정보'를 찾습니다.
       const originalMember = members.find(m => m.id === editingMember.id);
       let changeDetail = '단순 저장(변경 없음)';
 
-      // 2. 원본 데이터와 현재 팝업창에 입력된 데이터(edit~)를 비교합니다.
       if (originalMember) {
         const changes = [];
         
-        // ① 생년월일 비교 (안전하게 String으로 감싸서 비교)
+        // ▼ 2. 운영진 권한(role) 변경 여부 감지 추가
+        if (originalMember.role !== editingMember.role) {
+          changes.push(`권한(${originalMember.role} ➔ ${editingMember.role})`);
+        }
+
         if (String(originalMember.age || '') !== String(cleanAge)) {
           changes.push(`생년월일(${originalMember.age} ➔ ${cleanAge})`);
         }
 
-        // ② 가입일자 비교
         const originalJoinDate = originalMember.created_at?.split('T')[0] || '';
         if (originalJoinDate !== String(editJoinDate)) {
           changes.push(`가입일자(${originalJoinDate} ➔ ${editJoinDate})`);
         }
 
-        // ③ 성별 비교
         if (String(originalMember.gender || '') !== String(editGender)) {
           changes.push(`성별(${originalMember.gender} ➔ ${editGender})`);
         }
 
-        // ④ 급수 비교
         if (String(originalMember.grade || '') !== String(editGrade)) {
           changes.push(`급수(${originalMember.grade}조 ➔ ${editGrade}조)`);
         }
 
-        // ⑤ 비고칸 비교
         const originalReason = originalMember.att_reason || '';
         const newReason = editAttReason.trim();
         if (originalReason !== newReason) {
@@ -262,7 +261,7 @@ export default function MemberManagementPage() {
         }
       }
 
-      // 3. 추출한 상세 변경 내역을 3번째 파라미터로 함께 보냅니다.
+      // 3. 로그 전송 (변경 내역이 failure_reason 컬럼에 상세히 기록됨)
       logMemberAction('MEMBER_UPDATE', `[회원 수정] ${editingMember.name}`, changeDetail); 
       
       showPopup('alert', '수정 완료', '회원 정보가 성공적으로 수정되었습니다.');
@@ -859,41 +858,64 @@ export default function MemberManagementPage() {
         </table>
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-2 mt-6">
-          <button 
-            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-            disabled={currentPage === 1}
-            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-          >
-            이전
-          </button>
-          
-          <div className="flex gap-1">
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-              <button
-                key={page}
-                onClick={() => setCurrentPage(page)}
-                className={`w-10 h-10 rounded-lg text-sm font-bold transition-colors ${
-                  currentPage === page 
-                    ? 'bg-indigo-600 text-white shadow-md' 
-                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                {page}
-              </button>
-            ))}
-          </div>
+      {totalPages > 1 && (() => {
+        const pageBlock = 10;
+        const currentBlock = Math.ceil(currentPage / pageBlock);
+        const startPage = (currentBlock - 1) * pageBlock + 1;
+        const endPage = Math.min(startPage + pageBlock - 1, totalPages);
 
-          <button 
-            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-            disabled={currentPage === totalPages}
-            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-          >
-            다음
-          </button>
-        </div>
-      )}
+        return (
+          <div className="flex justify-center items-center gap-2 mt-6">
+            <button 
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+              title="처음으로"
+            >
+              &lt;&lt;
+            </button>
+            <button 
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+            >
+              이전
+            </button>
+            
+            <div className="flex gap-1">
+              {Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i).map(page => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`w-10 h-10 rounded-lg text-sm font-bold transition-colors ${
+                    currentPage === page 
+                      ? 'bg-indigo-600 text-white shadow-md' 
+                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+            </div>
+
+            <button 
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+            >
+              다음
+            </button>
+            <button 
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+              title="마지막으로"
+            >
+              &gt;&gt;
+            </button>
+          </div>
+        );
+      })()}
 
       {/* 신규 회원 등록 팝업 모달 */}
       {isRegisterModalOpen && (

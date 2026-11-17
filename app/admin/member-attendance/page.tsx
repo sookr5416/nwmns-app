@@ -487,92 +487,64 @@ export default function MonthlyMemberAttendancePage() {
         </div>
       </div>
 
-      {/* 페이지네이션 */}
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-2 mt-6">
-          <button 
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-          >
-            이전
-          </button>
-          
-          <div className="flex gap-1">
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-              <button
-                key={page}
-                onClick={() => handlePageChange(page)}
-                className={`w-10 h-10 rounded-lg text-sm font-bold transition-colors ${
-                  currentPage === page 
-                    ? 'bg-indigo-600 text-white shadow-md' 
-                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                {page}
-              </button>
-            ))}
-          </div>
+      {totalPages > 1 && (() => {
+        const pageBlock = 10;
+        const currentBlock = Math.ceil(currentPage / pageBlock);
+        const startPage = (currentBlock - 1) * pageBlock + 1;
+        const endPage = Math.min(startPage + pageBlock - 1, totalPages);
 
-          <button 
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-          >
-            다음
-          </button>
-        </div>
-      )}
-
-      {/* 상세 출석 날짜 팝업 모달 */}
-      {selectedMemberModal && (
-        <div 
-          className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm transition-opacity"
-          onClick={() => setSelectedMemberModal(null)}
-        >
-          <div 
-            className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-up" 
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="text-lg font-extrabold text-slate-800">
-                <span className="text-indigo-600">{selectedMemberModal.name}</span> 회원 참석 내역
-              </h3>
-              <button 
-                onClick={() => setSelectedMemberModal(null)} 
-                className="text-slate-400 hover:text-slate-600 transition-colors w-8 h-8 rounded-full flex items-center justify-center bg-white border border-slate-200"
-                title="닫기"
-              >
-                ✕
-              </button>
-            </div>
+        return (
+          <div className="flex justify-center items-center gap-2 mt-6">
+            <button 
+              onClick={() => handlePageChange(1)}
+              disabled={currentPage === 1}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+              title="처음으로"
+            >
+              &lt;&lt;
+            </button>
+            <button 
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+            >
+              이전
+            </button>
             
-            <div className="p-6">
-              <div className="text-sm font-bold text-slate-500 mb-4 flex items-center justify-between">
-                <span>{selectedMonth.split('-')[0]}년 {selectedMonth.split('-')[1]}월</span>
-                <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md">총 {selectedMemberModal.monthlyCount}회</span>
-              </div>
-              
-              {selectedMemberModal.monthlyCount > 0 ? (
-                <ul className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
-                  {selectedMemberModal.attendedDates.map((date, i) => (
-                    <li key={i} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 text-slate-700 font-bold shadow-sm">
-                      <span className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-black shrink-0">
-                        {i + 1}
-                      </span>
-                      {date} ({getDayOfWeek(date)})
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="text-center py-10 text-slate-400 font-bold bg-slate-50 rounded-xl border border-slate-100 border-dashed">
-                  이번 달 참석 기록이 없습니다.
-                </div>
-              )}
+            <div className="flex gap-1">
+              {Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i).map(page => (
+                <button
+                  key={page}
+                  onClick={() => handlePageChange(page)}
+                  className={`w-10 h-10 rounded-lg text-sm font-bold transition-colors ${
+                    currentPage === page 
+                      ? 'bg-indigo-600 text-white shadow-md' 
+                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
             </div>
+
+            <button 
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+            >
+              다음
+            </button>
+            <button 
+              onClick={() => handlePageChange(totalPages)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+              title="마지막으로"
+            >
+              &gt;&gt;
+            </button>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 경고창 팝업 */}
       <CustomPopup popup={popup} onClose={closePopup} />
