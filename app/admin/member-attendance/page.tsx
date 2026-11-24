@@ -546,6 +546,121 @@ export default function MonthlyMemberAttendancePage() {
         );
       })()}
 
+      {/* 상세 출석 날짜 달력 팝업 모달 */}
+      {selectedMemberModal && (() => {
+        const [yearStr, monthStr] = selectedMonth.split('-');
+        const year = Number(yearStr);
+        const month = Number(monthStr); // 1 ~ 12
+        const firstDayOfWeek = new Date(year, month - 1, 1).getDay(); // 0(일) ~ 6(토)
+        const daysInMonth = new Date(year, month, 0).getDate(); // 해당 월의 총 일수
+        const attendedSet = new Set(selectedMemberModal.attendedDates);
+
+        const calendarCells: (number | null)[] = [
+          ...Array.from({ length: firstDayOfWeek }, () => null),
+          ...Array.from({ length: daysInMonth }, (_, idx) => idx + 1),
+        ];
+        while (calendarCells.length % 7 !== 0) {
+          calendarCells.push(null);
+        }
+
+        const formatFullDate = (day: number) =>
+          `${yearStr}-${monthStr}-${String(day).padStart(2, '0')}`;
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm transition-opacity"
+            onClick={() => setSelectedMemberModal(null)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-scale-up"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 헤더 */}
+              <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 className="text-lg font-extrabold text-slate-800">
+                  <span className="text-indigo-600">{selectedMemberModal.name}</span> 회원 참석 달력
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMemberModal(null)}
+                  className="text-slate-400 hover:text-slate-600 transition-colors w-8 h-8 rounded-full flex items-center justify-center bg-white border border-slate-200 cursor-pointer"
+                  title="닫기"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* 본문 */}
+              <div className="p-6">
+                <div className="text-sm font-bold text-slate-500 mb-4 flex items-center justify-between">
+                  <span>{year}년 {month}월</span>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600">
+                      <span className="w-3 h-3 rounded-full bg-indigo-600 inline-block"></span>
+                      참석일
+                    </span>
+                    <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md">
+                      총 {selectedMemberModal.monthlyCount}회
+                    </span>
+                  </div>
+                </div>
+
+                {/* 요일 헤더 */}
+                <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold mb-2">
+                  <div className="py-1 text-red-500">일</div>
+                  <div className="py-1 text-slate-500">월</div>
+                  <div className="py-1 text-slate-500">화</div>
+                  <div className="py-1 text-slate-500">수</div>
+                  <div className="py-1 text-slate-500">목</div>
+                  <div className="py-1 text-slate-500">금</div>
+                  <div className="py-1 text-blue-500">토</div>
+                </div>
+
+                {/* 달력 날짜 그리드 */}
+                <div className="grid grid-cols-7 gap-y-2 gap-x-1 text-center">
+                  {calendarCells.map((day, idx) => {
+                    if (day === null) {
+                      return <div key={`empty-${idx}`} className="h-9" />;
+                    }
+
+                    const fullDate = formatFullDate(day);
+                    const isAttended = attendedSet.has(fullDate);
+                    const dayOfWeek = idx % 7;
+
+                    return (
+                      <div key={fullDate} className="h-9 flex items-center justify-center">
+                        <span
+                          title={isAttended ? `${fullDate} 참석` : fullDate}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                            isAttended
+                              ? 'bg-indigo-600 text-white ring-2 ring-indigo-200 shadow-sm'
+                              : dayOfWeek === 0
+                              ? 'text-red-400'
+                              : dayOfWeek === 6
+                              ? 'text-blue-400'
+                              : 'text-slate-600'
+                          }`}
+                        >
+                          {day}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 하단 참석 일자 요약 */}
+                <div className="mt-5 pt-4 border-t border-slate-100 text-xs text-slate-500">
+                  <span className="font-bold text-slate-700 mr-1.5">참석 일자:</span>
+                  {selectedMemberModal.attendedDates.length > 0
+                    ? selectedMemberModal.attendedDates.map((d) => `${Number(d.split('-')[2])}일`).join(', ')
+                    : '이번 달 참석 기록이 없습니다.'}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 경고창 팝업 */}
       <CustomPopup popup={popup} onClose={closePopup} />
     </div>
